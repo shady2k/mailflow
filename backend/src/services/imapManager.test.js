@@ -274,9 +274,9 @@ describe('providerProfile — oauth_provider fallback', () => {
 // ── providerProfile — skipFolderPatterns ─────────────────────────────────────
 
 describe('providerProfile — skipFolderPatterns', () => {
-  it('google skips All Mail, Starred, Important', () => {
+  it('google imports archived All Mail and skips only Starred/Important views', () => {
     const { skipFolderPatterns } = providerProfile(account('imap.gmail.com'));
-    expect(skipFolderPatterns.some(p => '[Gmail]/All Mail'.toLowerCase().includes(p))).toBe(true);
+    expect(skipFolderPatterns.some(p => '[Gmail]/All Mail'.toLowerCase().includes(p))).toBe(false);
     expect(skipFolderPatterns.some(p => '[Gmail]/Starred'.toLowerCase().includes(p))).toBe(true);
     expect(skipFolderPatterns.some(p => '[Gmail]/Important'.toLowerCase().includes(p))).toBe(true);
   });

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react
 import { useTranslation } from 'react-i18next';
 import { useStore, selectSelectedMessageMid, selectSelectedMessageAccountId } from '../store/index.js';
 import { api } from '../utils/api.js';
+import BodyIndexStatus from './BodyIndexStatus.jsx';
 import { LAYOUTS } from '../layouts.js';
 import { senderColor } from '../themes.js';
 import { useMobile } from '../hooks/useMobile.js';
@@ -2681,6 +2682,8 @@ export default function MessageList() {
       height: (isMobile || isColumn) ? undefined : '100%',
       background: 'var(--bg-primary)',
     }}>
+
+      <BodyIndexStatus />
 
       {/* ── Mobile header ───────────────────────────────────────────────── */}
       {isMobile && (

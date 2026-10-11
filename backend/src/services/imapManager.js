@@ -938,7 +938,7 @@ const PROVIDERS = {
     pushesFlags: false,
     snippetIndex: false,
     speculativeFetch: false,
-    skipFolderPatterns: ['all mail', '[gmail]/starred', '[gmail]/important'],
+    skipFolderPatterns: ['[gmail]/starred', '[gmail]/important'],
     // [Gmail] is a namespace container — not a selectable mailbox. It must be
     // matched exactly so that real subfolders like [Gmail]/Drafts are not skipped.
     skipFolderNames: ['[gmail]'],
@@ -1110,7 +1110,7 @@ export async function insertCopiedSibling(accountId, uid, fromFolder, toFolder, 
       read_changed_at, star_changed_at, spam_score_sa, spam_score_ml,
       spam_verdict, spam_analyzed_at, spam_details, spam_user_override,
       category, list_unsubscribe, list_unsubscribe_post, unsubscribed_at, delivery_addresses, sender_name, sender_email,
-      forwarded_from_name, forwarded_from_email, forwarded_via, bcc_addresses, plugin_annotations
+      forwarded_from_name, forwarded_from_email, forwarded_via, bcc_addresses, search_body_text, body_indexed_at, body_index_attempts, body_index_retry_at, body_index_lease_until, body_index_error, plugin_annotations
     )
     SELECT
       account_id, $4, $5, message_id, subject,
@@ -1121,7 +1121,7 @@ export async function insertCopiedSibling(accountId, uid, fromFolder, toFolder, 
       read_changed_at, star_changed_at, spam_score_sa, spam_score_ml,
       spam_verdict, spam_analyzed_at, spam_details, spam_user_override,
       category, list_unsubscribe, list_unsubscribe_post, unsubscribed_at, delivery_addresses, sender_name, sender_email,
-      forwarded_from_name, forwarded_from_email, forwarded_via, bcc_addresses, plugin_annotations
+      forwarded_from_name, forwarded_from_email, forwarded_via, bcc_addresses, search_body_text, body_indexed_at, body_index_attempts, body_index_retry_at, body_index_lease_until, body_index_error, plugin_annotations
     FROM messages
     WHERE account_id = $1 AND folder = $2 AND uid = $3
     ON CONFLICT (account_id, uid, folder) DO NOTHING
@@ -5118,7 +5118,8 @@ export class ImapManager {
   }
 
   // Runs backfillMessages for every folder: INBOX first, then all others sequentially.
-  // Skips provider-specific duplicate-view folders (e.g. Gmail's All Mail, Starred, Important)
+  // All Mail must be imported: it contains Gmail messages archived out of INBOX.
+  // Skips only redundant Starred/Important views
   // to avoid storing tens of thousands of duplicate message rows.
   async backfillAllFolders(account) {
     if (this.backfillAllRunning.has(account.id)) return;
@@ -5932,7 +5933,7 @@ export class ImapManager {
   // Uses a fresh connection to avoid lock contention with sync connection.
   // Auto-retries once on transient connection errors (stale pool connection, NAT
   // timeout, half-open TCP, etc.) so a single click is enough in all common cases.
-  async fetchMessageBody(account, uid, folder) {
+  async fetchMessageBody(account, uid, folder, { searchOnly = false } = {}) {
     // While the provider is refusing secondary logins, a body click can only succeed over a
     // session that already exists. If the pool holds an idle client, use it (no new LOGIN);
     // otherwise fail fast with a typed error the route turns into a clear 503, instead of
@@ -5965,7 +5966,7 @@ export class ImapManager {
         let structure = null;
         const prefetched = new Map(); // part number -> Buffer
 
-        if (!providerProfile(account).speculativeFetch) {
+        if (searchOnly || !providerProfile(account).speculativeFetch) {
           // Known to reject speculative part requests (e.g. Gmail, Yahoo) —
           // go straight to two-step to avoid a guaranteed server error.
           for await (const msg of client.fetch(uidStr, { uid: true, bodyStructure: true }, { uid: true })) {
@@ -6025,7 +6026,7 @@ export class ImapManager {
         const calendarParts = results.textParts.length === 0 ? results.calendarParts : [];
 
         // Fetch any text/image parts not already obtained from the speculative fetch
-        const inlineImages = results.inlineImages || [];
+        const inlineImages = searchOnly ? [] : results.inlineImages || [];
         const needed = [
           ...new Set([
             ...results.textParts.map(p => p.part),
@@ -6148,7 +6149,7 @@ export class ImapManager {
 
       // Some malformed emails include NUL bytes that PostgreSQL rejects in text
       // columns. Strip them once here so all callers are safe.
-      return { html: sanitizeStr(html), text: sanitizeStr(text), attachments };
+      return { html: sanitizeStr(html), text: sanitizeStr(text), attachments, ...(searchOnly ? { found: true } : {}) };
     });
 
     // Providers flagged preferFreshBodyFetch (e.g. PurelyMail) skip the shared pool on the

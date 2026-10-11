@@ -92,7 +92,8 @@ const RELOCATE_COPY_COLS = [
   'spam_analyzed_at', 'spam_details', 'spam_user_override', 'category', 'list_unsubscribe',
   'list_unsubscribe_post', 'unsubscribed_at', 'delivery_addresses', 'plugin_annotations',
   'sender_name', 'sender_email', 'forwarded_from_name', 'forwarded_from_email', 'forwarded_via',
-  'bcc_addresses',
+  'bcc_addresses', 'search_body_text', 'body_indexed_at', 'body_index_attempts',
+  'body_index_retry_at', 'body_index_lease_until', 'body_index_error',
 ];
 // INSERT target list and the matching SELECT projection. account_id + the carried columns come
 // from the deleted row; uid is the UIDPLUS-mapped new uid; folder is the destination ($4).

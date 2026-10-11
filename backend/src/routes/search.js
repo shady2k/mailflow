@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { query } from '../services/db.js';
 import { requireAuth } from '../middleware/auth.js';
+import { foldedMatch, freeTextTermCondition, searchRowsSQL } from '../services/searchText.js';
+export { freeTextTermCondition } from '../services/searchText.js';
+import { bodyIndexStatus } from '../services/bodyIndexer.js';
 import { resolveAccountScope } from '../services/unifiedInbox.js';
 
 const router = Router();
@@ -104,25 +107,9 @@ export function trashFolderExclusionCondition() {
       )`;
 }
 
-// Postgres refuses to build a tsvector larger than ~1MB of packed lexemes
-// (SQLSTATE 54000), so an oversized body would 500 the whole search. Cap the
-// text fed to to_tsvector at 600k chars — matching msgvault's maxFTSBodyChars
-// (internal/store/dialect_pg.go) — so one huge email can't crash the query.
-// Exported because slice 02's search_fts trigger caps the same way.
-export const FTS_BODY_CHAR_CAP = 600000;
-
-// Builds the per-term free-text OR-condition: a term matches if it appears in
-// the sender, the subject, the stored search_vector, or the length-capped body.
-// Extracted so the body cap is a single, testable source of truth.
-export function freeTextTermCondition(likeIdx, ftsIdx) {
-  return `(
-        m.from_name ILIKE $${likeIdx}
-        OR m.from_email ILIKE $${likeIdx}
-        OR m.subject ILIKE $${likeIdx}
-        OR m.search_vector @@ plainto_tsquery('english', $${ftsIdx})
-        OR to_tsvector('english', LEFT(coalesce(m.body_text,''), ${FTS_BODY_CHAR_CAP})) @@ plainto_tsquery('english', $${ftsIdx})
-      )`;
-}
+router.get('/index-status', async (req, res) => {
+  res.json({ scope: 'loaded_headers', accounts: await bodyIndexStatus(query, req.session.userId) });
+});
 
 router.get('/', searchLimiter, async (req, res) => {
   const { q, accountId, limit = 50, offset = 0 } = req.query;
@@ -163,15 +150,15 @@ router.get('/', searchLimiter, async (req, res) => {
 
     if (f.key === 'from') {
       params.push(`%${f.value}%`);
-      cond = `(m.from_email ILIKE $${p} OR m.from_name ILIKE $${p})`;
+      cond = `(${foldedMatch('m.from_email', p)} OR ${foldedMatch('m.from_name', p)})`;
       p++;
     } else if (f.key === 'subject') {
       params.push(`%${f.value}%`);
-      cond = `m.subject ILIKE $${p++}`;
+      cond = foldedMatch('m.subject', p++);
     } else if (f.key === 'to') {
       // to: searches the to/cc address JSON — cast to text covers name and email
       params.push(`%${f.value}%`);
-      cond = `(m.to_addresses::text ILIKE $${p} OR m.cc_addresses::text ILIKE $${p})`;
+      cond = `(${foldedMatch('m.to_addresses::text', p)} OR ${foldedMatch('m.cc_addresses::text', p)})`;
       p++;
     } else if (f.key === 'has') {
       if (f.value === 'attachment' || f.value === 'attachments') cond = `m.has_attachments = true`;
@@ -191,8 +178,8 @@ router.get('/', searchLimiter, async (req, res) => {
   }
 
   // ── Free-text terms ───────────────────────────────────────────────────────
-  // Each term must match at least one of: from, subject (ILIKE — good for names
-  // and partial words), or body content (FTS — good for large text with stemming).
+  // Folded substring matching uses the same expressions as the trigram indexes.
+  // The body field contains full materialized text, including unopened messages.
   // AND between all terms: every word must appear somewhere in the email.
   // A negated term (-word) must appear nowhere.
 
@@ -201,10 +188,7 @@ router.get('/', searchLimiter, async (req, res) => {
     params.push(`%${term.value}%`); // ILIKE pattern
     const likeIdx = p++;
 
-    params.push(term.value); // raw term for plainto_tsquery
-    const ftsIdx = p++;
-
-    const cond = freeTextTermCondition(likeIdx, ftsIdx);
+    const cond = freeTextTermCondition(likeIdx);
     conditions.push(term.negate ? negateCond(cond) : cond);
   }
 
@@ -221,7 +205,7 @@ router.get('/', searchLimiter, async (req, res) => {
       // A multi-word leaf like "[Gmail]/Sent Mail" needs the quoted form in:"sent mail".
       params.push(folderScope);
       params.push(`%/${folderScope}`);
-      conditions.push(`(m.folder ILIKE $${p} OR m.folder ILIKE $${p + 1})`);
+      conditions.push(`(${foldedMatch('m.folder', p)} OR ${foldedMatch('m.folder', p + 1)})`);
       p += 2;
     } else {
       params.push(folderScope);
@@ -239,20 +223,7 @@ router.get('/', searchLimiter, async (req, res) => {
   params.push(off);
 
   try {
-    const result = await query(`
-      SELECT
-        m.id, m.uid, m.folder, m.message_id, m.subject, m.from_name, m.from_email,
-        m.to_addresses, m.cc_addresses, m.in_reply_to, m.thread_references,
-        m.date, m.snippet, m.is_read, m.is_starred, m.has_attachments, m.account_id,
-        a.name as account_name, a.email_address as account_email, a.color as account_color
-      FROM messages m
-      JOIN email_accounts a ON m.account_id = a.id
-      WHERE m.account_id = ANY($1)
-        AND m.is_deleted = false
-        AND ${conditions.join('\n        AND ')}
-      ORDER BY m.date DESC
-      LIMIT $${p} OFFSET $${p + 1}
-    `, params);
+    const result = await query(searchRowsSQL(conditions, p), params);
 
     res.json({ messages: result.rows, query: q });
   } catch (err) {

@@ -45,6 +45,7 @@ import { runMigrations } from './services/migrations.js';
 import { parseVCard } from './utils/vcard.js';
 import { reloadAuthSettings } from './services/authLimiter.js';
 import { createWebSocketServer, setupWebSocket } from './services/websocket.js';
+import { BodyIndexer } from './services/bodyIndexer.js';
 import { ImapManager } from './services/imapManager.js';
 import { getUpdateStatus } from './services/updateCheck.js';
 import { recordHttp } from './services/performanceMetrics.js';
@@ -296,12 +297,22 @@ try {
   console.error('Startup account connection error:', err.message);
 }
 
+const bodyIndexer = new BodyIndexer({
+  query,
+  fetchBody: (account, uid, folder) => imapManager.fetchMessageBody(account, uid, folder, { searchOnly: true }),
+  canFetch: account => !imapManager._secondaryConnectBlocked(account.id)
+    && !imapManager.backfillAllRunning.has(account.id)
+    && Date.now() - (imapManager.lastUserActivity.get(account.id) || 0) >= 5000,
+});
+bodyIndexer.start();
+
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, () => {
   console.log(`MailFlow backend running on port ${PORT}`);
 });
 
 function exitAfterClose(code) {
+  bodyIndexer.stop();
   // A send held for its undo window lives only in this process: deliver it now rather than
   // lose it with the restart (services/sendHold.js). Bounded to leave room for the rest.
   const heldSendsFlushed = flushHeldSends(8000)
