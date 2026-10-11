@@ -33,7 +33,7 @@ suite('PostgreSQL C-locale full-body search and durable queue', () => {
       name text, email_address text, color text, enabled boolean DEFAULT true, protocol text DEFAULT 'imap');
       CREATE TABLE messages (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), account_id uuid, uid integer,
       folder text DEFAULT 'INBOX', message_id text, subject text, from_name text, from_email text,
-      date timestamptz DEFAULT now(), is_deleted boolean DEFAULT false, body_text text, body_html text,
+      date timestamptz DEFAULT '2026-01-01', is_deleted boolean DEFAULT false, body_text text, body_html text,
       to_addresses jsonb, cc_addresses jsonb, in_reply_to text, thread_references text[], snippet text,
       is_read boolean DEFAULT false, is_starred boolean DEFAULT false, has_attachments boolean DEFAULT false)`);
     if (process.env.SEARCH_TEST_NO_ICU) await query('CREATE COLLATION mailflow_search FROM "C"');
@@ -102,12 +102,12 @@ suite('PostgreSQL C-locale full-body search and durable queue', () => {
     expect(await search('RecoveredToken')).toHaveLength(1);
     expect((await bodyIndexStatus(query, a.user_id)).find(s => s.account_id === a.id).failed).toBe(0);
   });
-  it('indexes all accounts fairly and reuses label copies without losing archive-only messages', async () => {
+  it('indexes all accounts fairly without trusting duplicate Message-IDs', async () => {
     await insert(a, 5, { text: 'DuplicateBody', mid: '<same>' });
-    await new BodyIndexer({ query, fetchBody: async () => { throw new Error('must use cache'); } }).tick();
+    await new BodyIndexer({ query, fetchBody: async () => ({ text: 'DuplicateBody', found: true }) }).tick();
     await insert(a, 6, { folder: '[Gmail]/All Mail', mid: '<same>' });
     await insert(b, 7, { text: 'OtherAccountBody' });
-    const fetchBody = async () => { throw new Error('must reuse copy'); };
+    const fetchBody = async (account) => ({ text: account.id === a.id ? 'DistinctDuplicateBody' : 'OtherAccountBody', found: true });
     const worker = new BodyIndexer({ query, fetchBody });
     await worker.tick(); await worker.tick();
     expect(await search('duplicatebody')).toHaveLength(2);
@@ -118,16 +118,24 @@ suite('PostgreSQL C-locale full-body search and durable queue', () => {
     await insert(a, 11, { text: 'FolderToken', mid: '<same>', folder: '[Gmail]/All Mail' });
     await insert(a, 12, { text: 'FolderToken', mid: '<archive-only>', folder: '[Gmail]/All Mail' });
     await insert(b, 13, { text: 'FolderToken', mid: '<same>' });
+    await query('UPDATE messages SET search_body_text=body_text, body_indexed_at=now()');
     const all = await query(searchRowsSQL([freeTextTermCondition(2)], 3), [[a.id,b.id], '%foldertoken%', 50, 0]);
     expect(all.rows).toHaveLength(3);
     const archived = await query(searchRowsSQL([freeTextTermCondition(2), 'm.folder = $3'], 4), [[a.id], '%FOLDERTOKEN%', '[Gmail]/All Mail', 50, 0]);
     expect(archived.rows).toHaveLength(2);
     const subjects = await query(searchRowsSQL([foldedMatch('m.subject', 2), foldedMatch('m.from_name', 3)], 4), [[a.id,b.id], '%спасибо%', '%алексей%', 50, 0]);
     expect(subjects.rows).toHaveLength(3);
+    await insert(a, 14, { text: 'FolderToken', mid: '<same>', folder: 'INBOX' });
+    await query('UPDATE messages SET search_body_text=body_text, body_indexed_at=now()');
+    const repeated = await query(searchRowsSQL([freeTextTermCondition(2)], 3), [[a.id,b.id], '%foldertoken%', 50, 0]);
+    expect(repeated.rows).toHaveLength(4);
+    await insert(a, 15, { text: 'DifferentBodyToken', mid: '<same>', folder: 'INBOX' });
+    await query('UPDATE messages SET search_body_text=body_text, body_indexed_at=now()');
+    expect((await query(searchRowsSQL([freeTextTermCondition(2)], 3), [[a.id], '%differentbodytoken%', 50, 0])).rows).toHaveLength(1);
   });
   it('invalidates changed draft text and refuses a result for a changed/moved row', async () => {
     const message = await insert(a, 8, { text: 'OldDraft' });
-    const worker = new BodyIndexer({ query, fetchBody: async () => ({ text: 'unused' }) });
+    const worker = new BodyIndexer({ query, fetchBody: async () => ({ text: 'NewDraft', found: true }) });
     await worker.tick();
     await query('UPDATE messages SET body_text=$1 WHERE id=$2', ['NewDraft', message.id]);
     expect((await query('SELECT body_indexed_at FROM messages WHERE id=$1',[message.id])).rows[0].body_indexed_at).toBeNull();

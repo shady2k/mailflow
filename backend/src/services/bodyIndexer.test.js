@@ -12,15 +12,15 @@ describe('full body materialization', () => {
     expect(text).not.toContain('HiddenScript');
     expect(text).not.toContain('outside.invalid');
   });
-  it('indexes cached HTML without fetching again, including an empty valid body', async () => {
+  it('verifies legacy cached HTML with a full fetch, including an empty valid body', async () => {
     const query = vi.fn().mockResolvedValue({ rows: [] });
-    const fetchBody = vi.fn();
+    const fetchBody = vi.fn().mockResolvedValueOnce({ html: '<p>Unopened</p>', found: true }).mockResolvedValueOnce({ text: '', found: true });
     const worker = new BodyIndexer({ query, fetchBody });
     await worker.index({ ...row, body_html: '<p>Unopened</p>' });
-    expect(fetchBody).not.toHaveBeenCalled();
+    expect(fetchBody).toHaveBeenCalledTimes(1);
     expect(query.mock.calls[0][1][0]).toBe('Unopened');
     await worker.index({ ...row, body_text: '' });
-    expect(fetchBody).not.toHaveBeenCalled();
+    expect(fetchBody).toHaveBeenCalledTimes(2);
   });
   it('persists errors and retry dates instead of reporting unavailable messages complete', async () => {
     const query = vi.fn().mockResolvedValue({ rows: [] });

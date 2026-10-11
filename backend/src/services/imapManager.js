@@ -1,3 +1,4 @@
+import { collectSearchMime } from './searchMime.js';
 import { FolderStatusMonitor, checkpointFolderStatus } from './folderStatus.js';
 import { extractImapError } from './imapError.js';
 import { recordUnfetchable, suppressedUids, clearUnfetchable, hasRealGap } from './unfetchableUids.js';
@@ -6023,7 +6024,7 @@ export class ImapManager {
 
         // Calendar parts are only fetched when the message has no ordinary body —
         // a multipart/alternative invite keeps its normal text/html rendering.
-        const calendarParts = results.textParts.length === 0 ? results.calendarParts : [];
+        const calendarParts = searchOnly || results.textParts.length === 0 ? results.calendarParts : [];
 
         // Fetch any text/image parts not already obtained from the speculative fetch
         const inlineImages = searchOnly ? [] : results.inlineImages || [];
@@ -6058,9 +6059,9 @@ export class ImapManager {
           try {
             for await (const msg of client.fetch(uidStr, { uid: true, bodyParts: [part.part] }, { uid: true })) {
               const v = msg.bodyParts?.get(part.part);
-              if (v && v.length > 0) prefetched.set(part.part, v);
+              if (v != null && (searchOnly || v.length > 0)) prefetched.set(part.part, v);
             }
-          } catch { /* don't let a single part failure block others */ }
+          } catch (err) { if (searchOnly) throw err; /* reader tolerates partial content */ }
         }
 
         // Inline images normally keep the batched value for performance. Retry
@@ -6078,19 +6079,21 @@ export class ImapManager {
           } catch { /* keep the batched value if the direct retry fails */ }
         }
 
+        const completeSearch = searchOnly ? collectSearchMime([...results.textParts, ...calendarParts], prefetched, decodeBody) : null;
         for (const part of results.textParts) {
           const buf = prefetched.get(part.part);
           if (!buf) continue;
           const decoded = decodeBody(buf, part.encoding, part.charset);
-          if (part.type === 'text/html' && !html) html = decoded;
-          else if (part.type === 'text/plain' && !text) text = decoded;
+          if (part.type === 'text/html' && (searchOnly || !html)) html = searchOnly ? [html, decoded].filter(v => v != null).join('\n') : decoded;
+          else if (part.type === 'text/plain' && (searchOnly || !text)) text = searchOnly ? [text, decoded].filter(v => v != null).join('\n') : decoded;
         }
 
         // Calendar-only message (e.g. an Outlook forwarded meeting request):
         // render a readable invite card instead of raw VCALENDAR source. The
         // html rides the normal sanitizer path like any email HTML. Calendar
         // data with no renderable VEVENT is shown raw rather than as nothing.
-        if (!html && !text && calendarParts.length) {
+        if (completeSearch) { text = completeSearch.text; html = completeSearch.html; }
+        if (!searchOnly && !html && !text && calendarParts.length) {
           for (const part of calendarParts) {
             const buf = prefetched.get(part.part);
             if (!buf) continue;

@@ -64,21 +64,11 @@ export class BodyIndexer {
 
   async index(row) {
     try {
-      let body = { text: row.body_text, html: row.body_html };
-      let copiedText;
-      if (row.message_id && !/draft/i.test(row.folder) && body.text === null && body.html === null) {
-        const cached = await this.query(`SELECT search_body_text FROM messages
-          WHERE account_id = $1 AND message_id = $2 AND body_indexed_at IS NOT NULL
-            AND id != $3 AND NOT is_deleted AND folder !~* 'draft'
-          ORDER BY body_indexed_at DESC LIMIT 1`, [row.account.id, row.message_id, row.id]);
-        if (cached.rows.length) copiedText = cached.rows[0].search_body_text;
-      }
-      if (copiedText === undefined && body.text === null && body.html === null) {
-        if (!this.canFetch(row.account)) throw new Error('Provider temporarily limiting background connections');
-        body = await this.fetchBody(row.account, row.uid, row.folder);
-        if (!body.found && body.text == null && body.html == null) throw new Error('Message body unavailable; retry pending');
-      }
-      const text = copiedText ?? searchableBody(body);
+      // Rendering caches may omit later MIME parts; verify full coverage once.
+      if (!this.canFetch(row.account)) throw new Error('Provider temporarily limiting background connections');
+      const body = await this.fetchBody(row.account, row.uid, row.folder);
+      if (!body.found && body.text == null && body.html == null) throw new Error('Message body unavailable; retry pending');
+      const text = searchableBody(body);
       await this.query(`UPDATE messages SET search_body_text = $1, body_indexed_at = now(),
         body_index_error = NULL, body_index_retry_at = NULL, body_index_lease_until = NULL
         WHERE id = $2 AND uid = $3 AND folder = $4

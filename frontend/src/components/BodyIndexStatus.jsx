@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../utils/api.js';
 import { useStore } from '../store/index.js';
@@ -7,19 +7,30 @@ export default function BodyIndexStatus() {
   const { t } = useTranslation();
   const accountId = useStore(s => s.selectedAccountId);
   const ready = useStore(s => s.accountsReady);
+  const progress = useRef(null);
   const [accounts, setAccounts] = useState([]);
   const [error, setError] = useState(false);
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
+    let loading = false;
     const load = async () => {
+      if (cancelled || loading) return;
+      loading = true;
       try {
         const result = await api.bodyIndexStatus();
-        if (!cancelled) { setAccounts(result.accounts); setError(false); }
+        if (!cancelled) {
+          const count = result.accounts.reduce((n, a) => n + a.bodies_searchable, 0);
+          if (progress.current !== null && count > progress.current) window.dispatchEvent(new CustomEvent('mailflow:search_index_updated'));
+          progress.current = count;
+          setAccounts(result.accounts); setError(false);
+        }
       } catch { if (!cancelled) setError(true); }
+      finally { loading = false; }
     };
     void load();
     const timer = setInterval(load, 5000);
+    timer.unref?.();
     return () => { cancelled = true; clearInterval(timer); };
   }, [ready]);
   if (error) return <div role="status" style={{ padding: '4px 12px', fontSize: 11 }}>{t('search.indexUnavailable', 'Search indexing status unavailable')}</div>;
