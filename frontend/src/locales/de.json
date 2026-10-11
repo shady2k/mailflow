@@ -313,7 +313,8 @@
       "passwordLabel": "PDF-Passwort",
       "passwordSubmit": "Öffnen",
       "passwordIncorrect": "Falsches Passwort. Versuchen Sie es erneut."
-    }
+    },
+    "backToList": "Zurück zur Liste"
   },
   "messageList": {
     "replyDraftChanged": "Der Antwortentwurf wurde geändert. Öffne ihn erneut.",
@@ -452,6 +453,10 @@
       "vertical": {
         "label": "Vertikale Teilung",
         "description": "Nachrichtenliste über dem Lesebereich"
+      },
+      "inbox": {
+        "label": "Posteingang",
+        "description": "Kompakte Zeilen in voller Breite; Nachrichten per Klick öffnen"
       }
     }
   },
@@ -1893,5 +1898,10 @@
     "trash": "Papierkorb",
     "spam": "Spam",
     "archive": "Archiv"
+  },
+  "search": {
+    "indexUnavailable": "Status der Suchindexierung nicht verfügbar",
+    "indexProgress": "Kopfzeilen: {{headers}} · Durchsuchbare Inhalte: {{bodies}}/{{headers}}",
+    "indexRetrying": "Erneute Versuche: {{count}}"
   }
 }

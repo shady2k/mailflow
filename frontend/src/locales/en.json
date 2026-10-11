@@ -313,7 +313,8 @@
       "passwordLabel": "PDF password",
       "passwordSubmit": "Open",
       "passwordIncorrect": "Incorrect password. Try again."
-    }
+    },
+    "backToList": "Back to list"
   },
   "messageList": {
     "replyDraftChanged": "The reply draft changed. Try opening it again.",
@@ -452,6 +453,10 @@
       "vertical": {
         "label": "Vertical Split",
         "description": "Message list stacked above the reading pane"
+      },
+      "inbox": {
+        "label": "Inbox",
+        "description": "Full-width dense rows; open messages on click"
       }
     }
   },
@@ -1893,5 +1898,10 @@
     "trash": "Trash",
     "spam": "Spam",
     "archive": "Archive"
+  },
+  "search": {
+    "indexUnavailable": "Search indexing status unavailable",
+    "indexProgress": "Headers: {{headers}} · Bodies searchable: {{bodies}}/{{headers}}",
+    "indexRetrying": "Retrying: {{count}}"
   }
 }

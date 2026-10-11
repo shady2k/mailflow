@@ -2,8 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react
 import { useTranslation } from 'react-i18next';
 import { useStore, selectSelectedMessageMid, selectSelectedMessageAccountId } from '../store/index.js';
 import { api } from '../utils/api.js';
+import InboxRowContent from './InboxRowContent.jsx';
 import BodyIndexStatus from './BodyIndexStatus.jsx';
-import { LAYOUTS } from '../layouts.js';
+import { LAYOUTS, isSinglePaneLayout } from '../layouts.js';
 import { senderColor } from '../themes.js';
 import { useMobile } from '../hooks/useMobile.js';
 import { isAccountInUnifiedInbox } from '../utils/unifiedInbox.js';
@@ -123,7 +124,7 @@ export default function MessageList() {
     loadingMessages, setLoadingMessages, selectedMessageId, lastViewedMessageId,
     setSelectedMessage, updateMessage, removeMessage, removeMessages,
     decrementUnread, incrementUnread, addNotification, notifications, removeNotification,
-    searchQuery, setSearchQuery, setIsSearching,
+    searchQuery, setSearchQuery, isSearching, setIsSearching,
     searchResults, setSearchResults, openCompose, accountsReady, accounts,
     messagesRefreshToken, layout, setLayout, pageSize, setPageSize, scrollMode,
     setMobileSidebarOpen, unreadCounts, showContacts, setShowContacts,
@@ -163,8 +164,9 @@ export default function MessageList() {
   const undoableNotifications = notifications.filter(n => n.onUndo);
 
   const currentLayout = LAYOUTS[layout] || LAYOUTS.comfortable;
+  const singlePane = isSinglePaneLayout(layout, isMobile);
   const isColumn = currentLayout.direction === 'column';
-  const isNarrow = !isColumn && currentLayout.listWidth <= 260;
+  const isNarrow = !singlePane && !isColumn && currentLayout.listWidth <= 260;
 
   // Apply optimistic read guard to a batch of messages from the server.
   // Prevents a concurrent sync refresh from reverting a pending or recently-completed
@@ -186,6 +188,20 @@ export default function MessageList() {
   const [activeCategory, setActiveCategory] = useState('primary');
   const [currentPage, setCurrentPage] = useState(1);
   const currentPageRef = useRef(1);
+  useEffect(() => {
+    const capture = event => Object.assign(event.detail, { activeCategory, currentPage });
+    const restore = event => {
+      if (event.detail.activeCategory !== undefined) setActiveCategory(event.detail.activeCategory);
+      if (event.detail.currentPage !== undefined) setCurrentPage(event.detail.currentPage);
+    };
+    window.addEventListener('mailflow:inbox-capture', capture);
+    window.addEventListener('mailflow:inbox-restore', restore);
+    return () => {
+      window.removeEventListener('mailflow:inbox-capture', capture);
+      window.removeEventListener('mailflow:inbox-restore', restore);
+    };
+  }, [activeCategory, currentPage]);
+
   const archiveViewKeyRef = useRef(null);
   const [syncing, setSyncing] = useState(false);
   const [folderSyncing, setFolderSyncing] = useState(false);
@@ -311,6 +327,11 @@ export default function MessageList() {
   // Bumped to force the search effect to re-run (e.g. after rules move messages) so an
   // active search snapshot drops messages that no longer match. See #223.
   const [searchReloadToken, setSearchReloadToken] = useState(0);
+  useEffect(() => {
+    const refresh = () => setSearchReloadToken(token => token + 1);
+    window.addEventListener('mailflow:search_index_updated', refresh);
+    return () => window.removeEventListener('mailflow:search_index_updated', refresh);
+  }, []);
   // Server/network failure of the active search (e.g. rate-limit 429). Shown in
   // the empty state instead of a misleading "no results".
   const [searchError, setSearchError] = useState(null);
@@ -2672,11 +2693,11 @@ export default function MessageList() {
 
   return (
     <div style={{
-      width: isMobile ? '100%' : (isColumn ? '100%' : 'var(--list-width)'),
-      minWidth: isMobile ? undefined : (isColumn ? undefined : 180),
-      flex: isMobile ? 1 : (isColumn ? '0 0 42%' : undefined),
+      width: (isMobile || singlePane) ? '100%' : (isColumn ? '100%' : 'var(--list-width)'),
+      minWidth: (isMobile || singlePane) ? undefined : (isColumn ? undefined : 180),
+      flex: (isMobile || singlePane) ? 1 : (isColumn ? '0 0 42%' : undefined),
       minHeight: isColumn && !isMobile ? 0 : undefined,
-      borderRight: (isMobile || isColumn) ? 'none' : '1px solid var(--border-subtle)',
+      borderRight: (isMobile || singlePane || isColumn) ? 'none' : '1px solid var(--border-subtle)',
       borderBottom: (!isMobile && isColumn) ? '1px solid var(--border-subtle)' : 'none',
       display: 'flex', flexDirection: 'column',
       height: (isMobile || isColumn) ? undefined : '100%',
@@ -3421,6 +3442,8 @@ export default function MessageList() {
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
         <div
           ref={listRef}
+          data-mailflow-list-scroll
+          data-mailflow-list-loading={loadingMessages || isSearching || searchLoadingMore}
           onScroll={handleScroll}
           onKeyDown={handleListKeyDown}
           tabIndex={0}
@@ -3906,6 +3929,7 @@ export default function MessageList() {
                 lastViewedMessageId={lastViewedMessageId}
                 showAccount={false} /* No per-account dot on unified rows: it added noise beside the unread indicator; the account is visible in the message pane header. */
                 isNarrow={isNarrow}
+                inboxLayout={singlePane}
                 onThreadClick={() => handleThreadClick(message)}
                 onThreadToggle={() => handleThreadToggle(message)}
                 showMobileAvatars={showMobileAvatars}
@@ -3954,6 +3978,7 @@ export default function MessageList() {
                 selectionMode={selectionMode}
                 showAccount={false} /* No per-account dot on unified rows: it added noise beside the unread indicator; the account is visible in the message pane header. */
                 isNarrow={isNarrow}
+                inboxLayout={singlePane}
                 onSelect={handleSelect}
                 onOpenWindow={!isMobile ? handleOpenInWindow : undefined}
                 onToggleSelect={handleRowToggleSelect}
@@ -4416,7 +4441,7 @@ function EmptyState({ folderSyncing, searchQuery, searchError, unreadOnly, selec
   );
 }
 
-function ThreadRow({ message, isExpanded, threadMsgs, isLoadingThread, selectedMessageId, selectedMid, selectedAcct, lastViewedMessageId, showAccount, isNarrow, onThreadClick, onThreadToggle, showMobileAvatars, showMessagePreviews, onSelect, onOpenWindow, onMarkRead, onStar, onDelete, hoverQuickActions, hoverActionSet, onArchive, onSnooze, onContextMenu, onMove, onDragStart, isMobile, swipeLeftAction, swipeRightAction, onSwipeLeft, onSwipeRight, isChecked, selectionMode, onToggleSelect, onRangeSelect, onModifierSelect, onLongPress, onExplainSpam }) {
+function ThreadRow({ message, inboxLayout, isExpanded, threadMsgs, isLoadingThread, selectedMessageId, selectedMid, selectedAcct, lastViewedMessageId, showAccount, isNarrow, onThreadClick, onThreadToggle, showMobileAvatars, showMessagePreviews, onSelect, onOpenWindow, onMarkRead, onStar, onDelete, hoverQuickActions, hoverActionSet, onArchive, onSnooze, onContextMenu, onMove, onDragStart, isMobile, swipeLeftAction, swipeRightAction, onSwipeLeft, onSwipeRight, isChecked, selectionMode, onToggleSelect, onRangeSelect, onModifierSelect, onLongPress, onExplainSpam }) {
   const { t } = useTranslation();
   const [hovered, setHovered] = useState(false);
   const messageCount = message.message_count || 1;
@@ -4490,12 +4515,15 @@ function ThreadRow({ message, isExpanded, threadMsgs, isLoadingThread, selectedM
         onContextMenu={!isMobile ? (e => onContextMenu(e, message)) : undefined}
         style={{
           display: 'flex', alignItems: 'flex-start', gap: 10,
-          padding: '11px 14px', cursor: 'pointer',
+          padding: inboxLayout ? '6px 14px' : '11px 14px', cursor: 'pointer',
           background: rowBg, transition: 'background 0.1s',
           position: 'relative',
           willChange: isMobile ? 'transform' : undefined,
         }}
       >
+        {inboxLayout ? <InboxRowContent message={message} unread={unreadCount > 0} checked={isChecked}
+          onToggleSelect={onToggleSelect} onStar={onStar} showPreview={showMessagePreviews}
+          count={messageCount} onToggleThread={onThreadToggle} expanded={isExpanded} /> : <>
         {/* Left indicator: checkbox in selection mode (narrow/mobile), unread dot otherwise */}
         {!hasAvatar ? (
           selectionMode ? (
@@ -4654,6 +4682,7 @@ function ThreadRow({ message, isExpanded, threadMsgs, isLoadingThread, selectedM
             </div>
           )}
         </div>
+        </>}
         {hovered && hoverQuickActions && (
           <RowHoverActions
             message={message}
@@ -4736,7 +4765,7 @@ function ThreadRow({ message, isExpanded, threadMsgs, isLoadingThread, selectedM
   );
 }
 
-function MessageRow({ message, selected, lastViewed, isChecked, selectionMode, showAccount, isNarrow, onSelect, onOpenWindow, onToggleSelect, onRangeSelect, onModifierSelect, onAvatarClick, showMobileAvatars, showMessagePreviews, onMarkRead, onStar, onDelete, hoverQuickActions, hoverActionSet, onArchive, onSnooze, onContextMenu, onMove, onDragStart, isMobile, swipeLeftAction, swipeRightAction, onSwipeLeft, onSwipeRight, onLongPress, onExplainSpam }) {
+function MessageRow({ message, inboxLayout, selected, lastViewed, isChecked, selectionMode, showAccount, isNarrow, onSelect, onOpenWindow, onToggleSelect, onRangeSelect, onModifierSelect, onAvatarClick, showMobileAvatars, showMessagePreviews, onMarkRead, onStar, onDelete, hoverQuickActions, hoverActionSet, onArchive, onSnooze, onContextMenu, onMove, onDragStart, isMobile, swipeLeftAction, swipeRightAction, onSwipeLeft, onSwipeRight, onLongPress, onExplainSpam }) {
   const { t } = useTranslation();
   const [hovered, setHovered] = useState(false);
   const [avatarHovered, setAvatarHovered] = useState(false);
@@ -4831,6 +4860,8 @@ function MessageRow({ message, selected, lastViewed, isChecked, selectionMode, s
             : undefined,
         }}
       >
+      {inboxLayout ? <InboxRowContent message={message} unread={!message.is_read} checked={isChecked}
+        onToggleSelect={onToggleSelect} onStar={onStar} showPreview={showMessagePreviews} /> : <>
       {/* Selected row left accent rail */}
       {selected && !selectionMode && (
         <div style={{
@@ -4992,6 +5023,7 @@ function MessageRow({ message, selected, lastViewed, isChecked, selectionMode, s
         </div>
       </div>
 
+      </>}
       {/* Hover actions — absolutely positioned so they never affect row height */}
       {hovered && hoverQuickActions && (
         <RowHoverActions

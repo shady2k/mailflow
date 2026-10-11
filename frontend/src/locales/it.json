@@ -313,7 +313,8 @@
       "passwordLabel": "Password del PDF",
       "passwordSubmit": "Apri",
       "passwordIncorrect": "Password errata. Riprova."
-    }
+    },
+    "backToList": "Torna all’elenco"
   },
   "messageList": {
     "replyDraftChanged": "La bozza di risposta è cambiata. Prova ad aprirla di nuovo.",
@@ -452,6 +453,10 @@
       "vertical": {
         "label": "Divisione verticale",
         "description": "Elenco messaggi sopra il riquadro di lettura"
+      },
+      "inbox": {
+        "label": "Posta in arrivo",
+        "description": "Righe compatte a tutta larghezza; apri i messaggi con un clic"
       }
     }
   },
@@ -1893,5 +1898,10 @@
     "trash": "Cestino",
     "spam": "Spam",
     "archive": "Archivio"
+  },
+  "search": {
+    "indexUnavailable": "Stato dell’indicizzazione non disponibile",
+    "indexProgress": "Intestazioni: {{headers}} · Corpi ricercabili: {{bodies}}/{{headers}}",
+    "indexRetrying": "Nuovi tentativi: {{count}}"
   }
 }

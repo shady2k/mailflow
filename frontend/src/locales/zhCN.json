@@ -313,7 +313,8 @@
       "passwordLabel": "PDF 密码",
       "passwordSubmit": "打开",
       "passwordIncorrect": "密码错误，请重试。"
-    }
+    },
+    "backToList": "返回列表"
   },
   "messageList": {
     "replyDraftChanged": "回复草稿已更改。请尝试重新打开。",
@@ -452,6 +453,10 @@
       "vertical": {
         "label": "上下分栏",
         "description": "邮件列表位于阅读窗格上方"
+      },
+      "inbox": {
+        "label": "收件箱",
+        "description": "全宽紧凑列表；点击打开邮件"
       }
     }
   },
@@ -1893,5 +1898,10 @@
     "trash": "已删除",
     "spam": "垃圾邮件",
     "archive": "归档"
+  },
+  "search": {
+    "indexUnavailable": "搜索索引状态不可用",
+    "indexProgress": "邮件头：{{headers}} · 可搜索正文：{{bodies}}/{{headers}}",
+    "indexRetrying": "重试中：{{count}}"
   }
 }

@@ -313,7 +313,8 @@
       "passwordLabel": "Contraseña del PDF",
       "passwordSubmit": "Abrir",
       "passwordIncorrect": "Contraseña incorrecta. Inténtalo de nuevo."
-    }
+    },
+    "backToList": "Volver a la lista"
   },
   "messageList": {
     "replyDraftChanged": "El borrador de respuesta ha cambiado. Intenta abrirlo de nuevo.",
@@ -452,6 +453,10 @@
       "vertical": {
         "label": "División vertical",
         "description": "Lista de mensajes sobre el panel de lectura"
+      },
+      "inbox": {
+        "label": "Bandeja de entrada",
+        "description": "Filas compactas a todo el ancho; abrir mensajes con un clic"
       }
     }
   },
@@ -1893,5 +1898,10 @@
     "trash": "Papelera",
     "spam": "Spam",
     "archive": "Archivo"
+  },
+  "search": {
+    "indexUnavailable": "Estado de indexación no disponible",
+    "indexProgress": "Cabeceras: {{headers}} · Cuerpos buscables: {{bodies}}/{{headers}}",
+    "indexRetrying": "Reintentos: {{count}}"
   }
 }

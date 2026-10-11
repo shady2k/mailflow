@@ -5,7 +5,9 @@ import { useStore } from '../store/index.js';
 import { api } from '../utils/api.js';
 import { useWebSocket } from '../hooks/useWebSocket.js';
 import { useMobile } from '../hooks/useMobile.js';
-import { LAYOUTS } from '../layouts.js';
+import InboxPanels from './InboxPanels.jsx';
+import { useInboxNavigation } from '../hooks/useInboxNavigation.js';
+import { LAYOUTS, isSinglePaneLayout } from '../layouts.js';
 import { updateFaviconBadge } from '../themes.js';
 import { installResumeRefresh } from '../utils/resumeRefresh.js';
 import { shortcutBus } from '../utils/shortcutBus.js';
@@ -191,6 +193,8 @@ export default function MailApp() {
   }, []);
 
   const currentLayout = LAYOUTS[layout] || LAYOUTS.comfortable;
+  const singlePane = isSinglePaneLayout(layout, isMobile);
+  useInboxNavigation(singlePane);
 
   // Shortcut hint (e.g. "⌘/") for the collapse/expand tooltips, derived from the
   // live shortcut map via the existing helpers — no new plumbing. '' when unbound.
@@ -839,8 +843,11 @@ export default function MailApp() {
               <Suspense fallback={lazyFallback}><ContactsPage /></Suspense>
             </div>
             <div style={{ display: showContacts ? 'none' : 'flex', flex: 1, minWidth: 0, overflow: 'hidden', height: '100%', flexDirection: currentLayout.direction }}>
-              <MessageList />
-              {currentLayout.direction === 'row' && (
+              <InboxPanels
+                singlePane={singlePane} selectedMessageId={selectedMessageId}
+                onBack={() => setSelectedMessage(null)}
+                list={<MessageList />} reader={<ReadingPane />}
+                divider={currentLayout.direction === 'row' && !singlePane && (
                 <div
                   onMouseDown={handleListResizeMouseDown}
                   style={{
@@ -852,9 +859,9 @@ export default function MailApp() {
                   onMouseLeave={e => { e.currentTarget.style.background = 'var(--border-subtle)'; }}
                 />
               )}
-              <ReadingPane />
+              />
               {/* Generic right-sidebar column, populated from the content seam above. */}
-              {currentLayout.direction === 'row' && rightSidebarContent != null && (
+              {!singlePane && currentLayout.direction === 'row' && rightSidebarContent != null && (
                 <>
                   {/* Resize handle is omitted while the sidebar is hidden. */}
                   {!rightSidebarHidden && (

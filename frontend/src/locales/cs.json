@@ -312,6 +312,10 @@
       "vertical": {
         "label": "Svislé rozdělení",
         "description": "Seznam zpráv nad čtecím podoknem"
+      },
+      "inbox": {
+        "label": "Doručená pošta",
+        "description": "Husté řádky přes celou šířku; zprávy otevřete kliknutím"
       }
     }
   },
@@ -430,7 +434,8 @@
       "passwordLabel": "Heslo k PDF",
       "passwordSubmit": "Otevřít",
       "passwordIncorrect": "Nesprávné heslo. Zkuste to znovu."
-    }
+    },
+    "backToList": "Zpět na seznam"
   },
   "compose": {
     "unsupportedDraftFrom": "Před uložením nebo odesláním tohoto konceptu vyberte nastaveného odesílatele.",
@@ -1912,5 +1917,10 @@
     "trash": "Koš",
     "spam": "Spam",
     "archive": "Archiv"
+  },
+  "search": {
+    "indexUnavailable": "Stav indexování vyhledávání není dostupný",
+    "indexProgress": "Hlavičky: {{headers}} · Prohledávatelná těla: {{bodies}}/{{headers}}",
+    "indexRetrying": "Opakované pokusy: {{count}}"
   }
 }

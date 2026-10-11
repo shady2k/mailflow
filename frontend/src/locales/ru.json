@@ -313,7 +313,8 @@
       "passwordLabel": "Пароль PDF",
       "passwordSubmit": "Открыть",
       "passwordIncorrect": "Неверный пароль. Попробуйте ещё раз."
-    }
+    },
+    "backToList": "Назад к списку"
   },
   "messageList": {
     "replyDraftChanged": "Черновик ответа изменился. Попробуйте открыть его снова.",
@@ -452,6 +453,10 @@
       "vertical": {
         "label": "Вертикальное разделение",
         "description": "Список писем над областью чтения"
+      },
+      "inbox": {
+        "label": "Входящие",
+        "description": "Плотные строки на всю ширину; письмо открывается по клику"
       }
     }
   },
@@ -1893,5 +1898,10 @@
     "trash": "Корзина",
     "spam": "Спам",
     "archive": "Архив"
+  },
+  "search": {
+    "indexUnavailable": "Статус индексации поиска недоступен",
+    "indexProgress": "Заголовки: {{headers}} · Тела доступны для поиска: {{bodies}}/{{headers}}",
+    "indexRetrying": "Повторные попытки: {{count}}"
   }
 }

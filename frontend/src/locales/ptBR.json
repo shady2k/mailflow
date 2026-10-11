@@ -313,7 +313,8 @@
       "passwordLabel": "Senha do PDF",
       "passwordSubmit": "Abrir",
       "passwordIncorrect": "Senha incorreta. Tente novamente."
-    }
+    },
+    "backToList": "Voltar à lista"
   },
   "messageList": {
     "replyDraftChanged": "O rascunho de resposta mudou. Tente abri-lo novamente.",
@@ -452,6 +453,10 @@
       "vertical": {
         "label": "Divisão vertical",
         "description": "Lista de mensagens acima do painel de leitura"
+      },
+      "inbox": {
+        "label": "Caixa de entrada",
+        "description": "Linhas compactas em largura total; abra mensagens com um clique"
       }
     }
   },
@@ -1893,5 +1898,10 @@
     "trash": "Lixeira",
     "spam": "Spam",
     "archive": "Arquivo"
+  },
+  "search": {
+    "indexUnavailable": "Status da indexação indisponível",
+    "indexProgress": "Cabeçalhos: {{headers}} · Corpos pesquisáveis: {{bodies}}/{{headers}}",
+    "indexRetrying": "Novas tentativas: {{count}}"
   }
 }

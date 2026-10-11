@@ -315,7 +315,8 @@
       "passwordLabel": "Hasło do PDF",
       "passwordSubmit": "Otwórz",
       "passwordIncorrect": "Nieprawidłowe hasło. Spróbuj ponownie."
-    }
+    },
+    "backToList": "Powrót do listy"
   },
   "messageList": {
     "replyDraftChanged": "Szkic odpowiedzi się zmienił. Spróbuj otworzyć go ponownie.",
@@ -466,6 +467,10 @@
       "vertical": {
         "label": "Podział pionowy",
         "description": "Lista wiadomości nad panelem czytania"
+      },
+      "inbox": {
+        "label": "Skrzynka odbiorcza",
+        "description": "Zwarte wiersze na całą szerokość; otwieraj wiadomości kliknięciem"
       }
     }
   },
@@ -1912,5 +1917,10 @@
     "trash": "Kosz",
     "spam": "Spam",
     "archive": "Archiwum"
+  },
+  "search": {
+    "indexUnavailable": "Stan indeksowania wyszukiwania jest niedostępny",
+    "indexProgress": "Nagłówki: {{headers}} · Przeszukiwalne treści: {{bodies}}/{{headers}}",
+    "indexRetrying": "Ponowne próby: {{count}}"
   }
 }

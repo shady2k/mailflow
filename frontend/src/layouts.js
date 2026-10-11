@@ -7,6 +7,12 @@
 // rowPy / rowPx: vertical / horizontal padding inside each message row
 
 export const LAYOUTS = {
+  inbox: {
+    labelKey: 'messageList.layouts.inbox.label', label: 'Inbox',
+    descriptionKey: 'messageList.layouts.inbox.description',
+    description: 'Full-width dense rows; open messages on click',
+    direction: 'row', listWidth: null, rowPy: 6, rowPx: 14, singlePane: true,
+  },
   focused: {
     labelKey: 'messageList.layouts.focused.label',
     label: 'Focused',
@@ -83,4 +89,8 @@ export function applyLayout(layoutKey, customListWidth) {
   if (layout.listWidth != null) {
     root.style.setProperty('--list-width', (customListWidth ?? layout.listWidth) + 'px');
   }
+}
+
+export function isSinglePaneLayout(layout, isMobile) {
+  return !isMobile && !!LAYOUTS[normalizeLayout(layout)].singlePane;
 }
