@@ -32,7 +32,7 @@ vi.mock('./connectionPolicy.js', () => ({ getConnectionPolicy: vi.fn() }));
 vi.mock('./spamPipeline.js', () => ({ classifyAndTagMessage: vi.fn() }));
 vi.mock('./mailAccess.js', () => ({ getAccountAddresses: vi.fn(async () => []) }));
 
-import { acquirePooledClient, releasePooledClient, evictPool, POOL_SIZE, ACQUIRE_TIMEOUT_MS, POOL_REFRESH_TIMEOUT_MS } from './imapManager.js';
+import { ImapManager, acquirePooledClient, releasePooledClient, evictPool, POOL_SIZE, ACQUIRE_TIMEOUT_MS, POOL_REFRESH_TIMEOUT_MS } from './imapManager.js';
 import { ImapFlow } from 'imapflow';
 import { query } from './db.js';
 import { resolveForConnection } from './hostValidation.js';
@@ -268,5 +268,38 @@ describe('refreshing a reused pooled session', () => {
     expect(got).toBe(held[0]);
     expect(held[0].noop).toHaveBeenCalledTimes(1);
     for (const c of [got, ...held.slice(1)]) releasePooledClient(ACCOUNT, c);
+  });
+});
+
+describe('new-message warmup foreground priority', () => {
+  it('never queues warmup ahead of a foreground click when the pool is occupied', async () => {
+    const manager = Object.create(ImapManager.prototype);
+    manager._secondaryConnectBlocked = () => null;
+    let releaseLock;
+    const makeClient = ImapFlow.getMockImplementation();
+    ImapFlow.mockImplementation(function (...args) {
+      const client = makeClient.apply(this, args);
+      client.getMailboxLock = vi.fn(() => new Promise(resolve => { releaseLock = () => resolve({ release() {} }); }));
+      client.fetch = vi.fn(async function* () { yield { bodyStructure: { type: 'text/plain', part: '1' }, bodyParts: new Map([['1', Buffer.from('Synthetic body')]]) }; });
+      return client;
+    });
+    const held = [];
+    for (let i = 0; i < POOL_SIZE; i++) held.push(await acquirePooledClient(ACCOUNT));
+    const warmup = manager.prefetchNewMessageBodies(ACCOUNT, [{ id: 'synthetic-new', uid: 9, folder: 'INBOX' }]);
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    let foregroundClient;
+    const foreground = acquirePooledClient(ACCOUNT).then(client => { foregroundClient = client; }).catch(() => {});
+    for (let i = 0; i < 12; i++) await Promise.resolve();
+    releasePooledClient(ACCOUNT, held[0]);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    try {
+      expect(foregroundClient).toBe(held[0]);
+      expect(ImapFlow).toHaveBeenCalledTimes(POOL_SIZE);
+    } finally {
+      releaseLock?.();
+      evictPool(ACCOUNT.id);
+      await foreground;
+      await warmup;
+    }
   });
 });

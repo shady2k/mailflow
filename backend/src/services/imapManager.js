@@ -5792,8 +5792,7 @@ export class ImapManager {
 
   // Pre-fetch and cache the body for newly arrived messages immediately after sync.
   // Called in the background (via setImmediate) so it doesn't block the sync path.
-  // By the time the user clicks the email (typically 2–10s later), the body is already
-  // in the DB and the click returns instantly without a live IMAP round-trip.
+  // Best-effort: yield to foreground pool work instead of queueing ahead of a click.
   async prefetchNewMessageBodies(account, messages) {
     for (const msg of messages) {
       try {
@@ -5805,7 +5804,7 @@ export class ImapManager {
         if (existing.rows.length) continue;
 
         const { html, text, attachments } = await this.fetchMessageBody(
-          account, msg.uid, msg.folder || 'INBOX'
+          account, msg.uid, msg.folder || 'INBOX', { background: true }
         );
         const safeHtml = html ? sanitizeEmail(html) : null;
         if (safeHtml || text) {
@@ -5819,6 +5818,7 @@ export class ImapManager {
           );
         }
       } catch (err) {
+        if (err.backgroundDeferred) return;
         console.warn(`Body prefetch failed for uid ${msg.uid}:`, err.message);
       }
     }
@@ -5867,7 +5867,7 @@ export class ImapManager {
         );
         if (existing.rows.length) continue;
 
-        const { html, text, attachments } = await this.fetchMessageBody(account, msg.uid, msg.folder);
+        const { html, text, attachments } = await this.fetchMessageBody(account, msg.uid, msg.folder, { background: true });
         const safeHtml = html ? sanitizeEmail(html) : null;
         if (safeHtml || text) {
           const snip = snippetFromBody(text, safeHtml || html);
@@ -5884,7 +5884,7 @@ export class ImapManager {
         // already armed, so stop the run at once. Burning it through the consecutive-error
         // count instead printed three 'Mail server is limiting connections' lines per folder
         // view, which is the noisy block the #474 reporter pasted back at us.
-        if (err?.providerRefusing) return;
+        if (err?.providerRefusing || err?.backgroundDeferred) return;
         const detail = extractImapError(err);
         console.warn(`Folder body prefetch failed for uid ${msg.uid}:`, detail);
 
@@ -5938,7 +5938,7 @@ export class ImapManager {
   // Uses a fresh connection to avoid lock contention with sync connection.
   // Auto-retries once on transient connection errors (stale pool connection, NAT
   // timeout, half-open TCP, etc.) so a single click is enough in all common cases.
-  async fetchMessageBody(account, uid, folder, { searchOnly = false, diagnostics = () => {} } = {}) {
+  async fetchMessageBody(account, uid, folder, { searchOnly = false, background = false, diagnostics = () => {} } = {}) {
     // While the provider is refusing secondary logins, a body click can only succeed over a
     // session that already exists. If the pool holds an idle client, use it (no new LOGIN);
     // otherwise fail fast with a typed error the route turns into a clear 503, instead of
@@ -6181,7 +6181,7 @@ export class ImapManager {
     // FIRST attempt too: a brand-new login avoids both contending with flag writes on the
     // size-2 pool and inheriting a frozen/half-open pooled session view that would hang the
     // fetch until its command timeout. Other providers keep pool-first for TLS reuse.
-    const firstAcquire = searchOnly
+    const firstAcquire = (searchOnly || background)
       ? (acct, fn) => withFreshClient(acct, fn, { background: true })
       : providerProfile(account).preferFreshBodyFetch ? withFreshLogin : withFreshClient;
     try {
@@ -6189,7 +6189,7 @@ export class ImapManager {
     } catch (firstErr) {
       if (firstErr.backgroundDeferred) throw firstErr;
       const detail = extractImapError(firstErr);
-      if (searchOnly && !firstErr.secondaryBackoffArmed && !firstErr.poolExhausted
+      if ((searchOnly || background) && !firstErr.secondaryBackoffArmed && !firstErr.poolExhausted
           && /\[LIMIT\]|throttl|rate.?limit|too many (?:connections|requests)|over quota|connection limit/i.test(detail)) {
         this._noteSecondaryRefusal(account);
       }
@@ -6209,7 +6209,7 @@ export class ImapManager {
         /EPIPE/.test(detail)
       );
       if (isTransient) {
-        if (searchOnly) throw firstErr;
+        if (searchOnly || background) throw firstErr;
         // No fresh-login retry while the secondary backoff is armed. The entry gate lets a
         // call through during a refusal window only so it can REUSE an idle pooled session;
         // retrying over a brand-new LOGIN is exactly the doomed request the gate exists to

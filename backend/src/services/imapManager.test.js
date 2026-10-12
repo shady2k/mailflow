@@ -1868,6 +1868,32 @@ describe('inline images the body never shows are listed as attachments', () => {
     expect(ImapFlow.mock.calls.length - before).toBe(1);
   });
 
+  it('background admission keeps full reader MIME and attachment metadata', async () => {
+    const { mgr, account } = serve({ type: 'multipart/mixed', childNodes: [
+      { part: '1', type: 'text/plain', encoding: '7bit' },
+      { part: '2', type: 'text/html', encoding: '7bit' },
+      { part: '3', type: 'application/pdf', disposition: 'attachment', parameters: { name: 'synthetic.pdf' }, size: 10 },
+    ] }, { '1': 'Synthetic plain body', '2': '<p>Synthetic HTML body</p>' });
+    const body = await mgr.fetchMessageBody(account, 42, 'INBOX', { background: true });
+    expect(body.text).toBe('Synthetic plain body');
+    expect(body.html).toBe('<p>Synthetic HTML body</p>');
+    expect(body.attachments).toEqual(expect.arrayContaining([expect.objectContaining({ filename: 'synthetic.pdf', part: '3', type: 'application/pdf' })]));
+    expect(body.renderComplete).toBe(true);
+  });
+
+  it('background full-body warmup does not retry a transient failure with a fresh login', async () => {
+    const { mgr, account } = serve({ type: 'text/plain', part: '1' }, {});
+    const create = ImapFlow.getMockImplementation();
+    ImapFlow.mockImplementation(function (...args) {
+      const client = create.apply(this, args);
+      client.fetch = vi.fn(async function* () { yield {}; throw new Error('ETIMEDOUT'); });
+      return client;
+    });
+    const connections = ImapFlow.mock.calls.length;
+    await expect(mgr.fetchMessageBody(account, 42, 'INBOX', { background: true })).rejects.toThrow('ETIMEDOUT');
+    expect(ImapFlow.mock.calls.length - connections).toBe(1);
+  });
+
   it('does not declare a reader cache complete when expected MIME text is missing', async () => {
     const { mgr, account } = serve({ type: 'multipart/mixed', childNodes: [
       { part: '1', type: 'text/plain', encoding: '7bit' },
