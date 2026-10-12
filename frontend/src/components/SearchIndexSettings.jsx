@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { htmlLang } from '../utils/browserLanguage.js';
 import { api } from '../utils/api.js';
 import { useSearchIndexStatus } from '../hooks/useSearchIndexStatus.js';
 
@@ -34,7 +35,7 @@ export default function SearchIndexSettings() {
         {t(loading ? 'searchIndex.refreshing' : 'searchIndex.refresh')}
       </button>
       {updatedAt && <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-        {t('searchIndex.updated', { time: updatedAt.toLocaleTimeString(i18n.language) })}
+        {t('searchIndex.updated', { time: updatedAt.toLocaleTimeString(htmlLang(i18n.language)) })}
       </span>}
     </div>
     {(error || actionError) && <p role="alert" style={{ color: 'var(--red)', fontSize: 13 }}>
