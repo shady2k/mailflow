@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main", "feat/unicode-body-search-and-inbox-layout", "test/integrated-indexing-cache-locale"]
+    branches: ["main", "feat/unicode-body-search-and-inbox-layout", "test/integrated-indexing-cache-locale", "fix/search-pending-feedback"]
   pull_request:
     branches: ["main"]
 
