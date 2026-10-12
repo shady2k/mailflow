@@ -6189,6 +6189,10 @@ export class ImapManager {
     } catch (firstErr) {
       if (firstErr.backgroundDeferred) throw firstErr;
       const detail = extractImapError(firstErr);
+      if (searchOnly && !firstErr.secondaryBackoffArmed && !firstErr.poolExhausted
+          && /\[LIMIT\]|throttl|rate.?limit|too many (?:connections|requests)|over quota|connection limit/i.test(detail)) {
+        this._noteSecondaryRefusal(account);
+      }
       // Retry once on any transient connection-level error (dead pool connection,
       // half-open TCP, NAT expiry, commandTimeout, socket reset, or an empty UID FETCH
       // from a frozen mailbox view). withFreshClient already evicted the bad pooled

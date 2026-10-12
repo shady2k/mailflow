@@ -1848,6 +1848,26 @@ describe('inline images the body never shows are listed as attachments', () => {
     return { mgr: new ImapManager({ clients: new Set() }), account };
   }
 
+  it.each([
+    ['[LIMIT] rate limit hit', true],
+    ['THROTTLED: too many requests', true],
+    ['ETIMEDOUT', false],
+    ['Command failed', false],
+  ])('backs off the account only for an explicit background body limit: %s', async (detail, limited) => {
+    const { mgr, account } = serve({ type: 'text/plain', part: '1' }, {});
+    const build = ImapFlow.getMockImplementation();
+    ImapFlow.mockImplementation(function (...args) {
+      const client = build.apply(this, args);
+      client.fetch = vi.fn(async function* () { yield {}; throw new Error(detail); });
+      return client;
+    });
+    const note = vi.spyOn(mgr, '_noteSecondaryRefusal');
+    const before = ImapFlow.mock.calls.length;
+    await expect(mgr.fetchMessageBody(account, 42, 'INBOX', { searchOnly: true })).rejects.toThrow();
+    expect(note).toHaveBeenCalledTimes(limited ? 1 : 0);
+    expect(ImapFlow.mock.calls.length - before).toBe(1);
+  });
+
   it('does not declare a reader cache complete when expected MIME text is missing', async () => {
     const { mgr, account } = serve({ type: 'multipart/mixed', childNodes: [
       { part: '1', type: 'text/plain', encoding: '7bit' },
