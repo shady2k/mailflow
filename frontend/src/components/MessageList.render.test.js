@@ -867,3 +867,18 @@ test('infinite select-all includes loaded rows only and newly appended rows rema
   assert.equal(container.querySelector('[title="messageList.archiveSelected"]'),null);
   await React.act(async()=>root.unmount());root=null;
 });
+
+test('search live region reserves space only for an active query', async () => {
+  await mount({ rows: [MESSAGE], threadedView: false, folder: 'All Mail' });
+  const region = () => container.querySelector('[role="status"][aria-live="polite"]');
+  assert.equal(region().style.height, '0px');
+  assert.equal(region().getAttribute('aria-atomic'), 'true');
+  const calls = deferredSearch();
+  await querySearch('synthetic');
+  assert.equal(region().style.height, '28px');
+  await pauseSearch();
+  await React.act(async () => calls[0].resolve({ messages: [MESSAGE] }));
+  assert.equal(region().style.height, '28px');
+  await querySearch('   ');
+  assert.equal(region().style.height, '0px');
+});

@@ -3531,7 +3531,7 @@ export default function MessageList() {
         </div>
       )}
 
-      <div role="status" aria-live="polite" aria-atomic="true" style={{ height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 14px', fontSize: 12, color: 'var(--text-secondary)' }}>
+      <div role="status" aria-live="polite" aria-atomic="true" style={{ height: searchQuery.trim() ? 28 : 0, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 14px', fontSize: 12, color: 'var(--text-secondary)' }}>
         {searchQuery.trim() && (isSearching || searchLoadingMore) && <>
           <span className="search-spinner" aria-hidden="true" />
           <span>{t('messageList.searching')}</span>
