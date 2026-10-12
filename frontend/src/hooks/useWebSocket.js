@@ -26,7 +26,7 @@ async function _forwardNativeNewMailNotification(notification) {
 }
 
 // Auth-related close codes that should not trigger reconnect
-const NO_RECONNECT_CODES = new Set([4001, 4003]);
+const NO_RECONNECT_CODES = new Set([1008, 4001, 4003]);
 
 // Module-level timer for debouncing backfill_progress refreshes
 let backfillRefreshTimer = null;
@@ -40,6 +40,8 @@ export function useWebSocket() {
   const wsRef = useRef(null);
   const reconnectTimer = useRef(null);
   const mountedRef = useRef(true);
+  const authBlocked = useRef(false);
+  const needsCatchUp = useRef(false);
   const reconnectAttempt = useRef(0);
   // True once the socket has connected at least once. Distinguishes the initial
   // page-load connect (message list is freshly fetched anyway) from any later
@@ -51,9 +53,16 @@ export function useWebSocket() {
   const { addNotification, updateAccount, setFolders, setBackfillProgress } = useStore();
 
   const connect = useCallback(() => {
+    if (!mountedRef.current || authBlocked.current) return;
+    clearTimeout(reconnectTimer.current);
+    if (wsRef.current) needsCatchUp.current = true;
     // Clean up any existing socket before opening a new one — prevents duplicate
     // connections if connect() is called while a previous socket is still open.
     if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+      wsRef.current.onopen = null;
+      wsRef.current.onmessage = null;
+      wsRef.current.onerror = null;
+      clearTimeout(wsRef.current._connectTimeout);
       wsRef.current.onclose = null;  // prevent old socket's close from scheduling another reconnect
       clearInterval(wsRef.current._pingInterval);
       wsRef.current.close();
@@ -61,18 +70,24 @@ export function useWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
+    ws._connectTimeout = setTimeout(() => {
+      if (wsRef.current === ws && ws.readyState === WebSocket.CONNECTING) connect();
+    }, 15000);
+
     ws.onopen = () => {
-      const wasReconnect = hasConnectedBefore.current;
+      clearTimeout(ws._connectTimeout);
+      const wasReconnect = hasConnectedBefore.current || needsCatchUp.current;
+      needsCatchUp.current = false;
       hasConnectedBefore.current = true;
       reconnectAttempt.current = 0;
       ws._lastActivity = Date.now();
       // Ping every 30s. If no message (including the server's pong) has arrived in ~2.5 intervals,
       // the socket is half-open — common after sleep/network blips, where onclose never fires and
-      // the tab silently stops receiving updates. Force-close it so onclose schedules a reconnect.
+      // the tab silently stops receiving updates. Replace it without waiting for a close handshake.
       const pingInterval = setInterval(() => {
         if (ws.readyState !== WebSocket.OPEN) return;
         if (Date.now() - (ws._lastActivity || 0) > 75000) {
-          try { ws.close(); } catch { /* onclose reconnects */ }
+          connect();
           return;
         }
         ws.send(JSON.stringify({ type: 'ping' }));
@@ -102,7 +117,10 @@ export function useWebSocket() {
 
     ws.onclose = (event) => {
       clearInterval(ws._pingInterval);
-      if (!mountedRef.current || NO_RECONNECT_CODES.has(event.code)) return;
+      clearTimeout(ws._connectTimeout);
+      if (wsRef.current !== ws) return;
+      if (NO_RECONNECT_CODES.has(event.code)) authBlocked.current = true;
+      if (!mountedRef.current || authBlocked.current) return;
       const attempt = reconnectAttempt.current;
       const delay = Math.min(BACKOFF_BASE * 2 ** attempt, BACKOFF_MAX);
       const jitter = Math.random() * 0.3 * delay;
@@ -365,17 +383,27 @@ export function useWebSocket() {
     return () => {
       mountedRef.current = false;
       clearTimeout(reconnectTimer.current);
-      if (wsRef.current) wsRef.current.close();
+      if (wsRef.current) {
+        clearTimeout(wsRef.current._connectTimeout);
+        clearInterval(wsRef.current._pingInterval);
+        wsRef.current.onopen = null;
+        wsRef.current.onmessage = null;
+        wsRef.current.onclose = null;
+        wsRef.current.onerror = null;
+        wsRef.current.close();
+      }
     };
   }, [connect]);
 
   // Revive a dropped socket the moment the user returns to the tab or the network comes back,
-  // instead of waiting out the reconnect backoff. (Half-open sockets are handled by the heartbeat.)
+  // instead of waiting out the reconnect backoff or a suspended heartbeat.
   useEffect(() => {
-    const revive = () => {
+    const revive = (event) => {
       if (document.visibilityState !== 'visible') return;
       const ws = wsRef.current;
-      if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+      if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING ||
+          (ws.readyState === WebSocket.OPEN && (event?.type === 'online' || event?.persisted ||
+            Date.now() - (ws._lastActivity || 0) > 75000))) {
         clearTimeout(reconnectTimer.current);
         reconnectAttempt.current = 0;
         connect();
@@ -383,9 +411,13 @@ export function useWebSocket() {
     };
     document.addEventListener('visibilitychange', revive);
     window.addEventListener('online', revive);
+    window.addEventListener('focus', revive);
+    window.addEventListener('pageshow', revive);
     return () => {
       document.removeEventListener('visibilitychange', revive);
       window.removeEventListener('online', revive);
+      window.removeEventListener('focus', revive);
+      window.removeEventListener('pageshow', revive);
     };
   }, [connect]);
 
