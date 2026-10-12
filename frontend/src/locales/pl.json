@@ -482,7 +482,11 @@
         "label": "Skrzynka odbiorcza",
         "description": "Zwarte wiersze na całą szerokość; otwieraj wiadomości kliknięciem"
       }
-    }
+    },
+    "selectCurrentPage": "Zaznacz bieżącą stronę",
+    "deselectCurrentPage": "Odznacz bieżącą stronę",
+    "selectLoadedMessages": "Zaznacz wczytane wiadomości",
+    "deselectLoadedMessages": "Odznacz wczytane wiadomości"
   },
   "lockScreen": {
     "subtitle": "Wpisz swój PIN aby odblokować",

@@ -468,7 +468,11 @@
         "label": "Inbox",
         "description": "Full-width dense rows; open messages on click"
       }
-    }
+    },
+    "selectCurrentPage": "Select current page",
+    "deselectCurrentPage": "Deselect current page",
+    "selectLoadedMessages": "Select loaded messages",
+    "deselectLoadedMessages": "Deselect loaded messages"
   },
   "lockScreen": {
     "subtitle": "Enter your PIN to unlock",

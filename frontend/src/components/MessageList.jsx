@@ -1484,6 +1484,15 @@ export default function MessageList() {
 
   // Derived from store — must be declared before callbacks that use it in dependency arrays
   const displayMessages = searchQuery.trim() ? searchResults : messages;
+  useLayoutEffect(() => {
+    const visibleIds = new Set(displayMessages.map(message => message.id));
+    setSelectedIds(previous => {
+      const next = new Set([...previous].filter(id => visibleIds.has(id)));
+      return next.size === previous.size ? previous : next;
+    });
+  }, [displayMessages]);
+  useLayoutEffect(clearSelection, [clearSelection, selectedAccountId, selectedFolder, searchQuery, activeCategory, unreadOnly, currentPage, threadedView]);
+
 
   // Folder search results — shown at the top when searching with a plain query
   // (no special operator prefixes like from:, to:, subject:, has:, is:)
@@ -2762,8 +2771,13 @@ export default function MessageList() {
   // Derived bulk-selection values (computed fresh each render, no stale closure risk)
   const selectionMode = selectedIds.size > 0 || selectionModeActive;
   const selectedMsgs = displayMessages.filter(m => selectedIds.has(m.id));
-  const selectedCount = selectedIds.size;
-  const allSelected = displayMessages.length > 0 && selectedIds.size === displayMessages.length;
+  const selectedCount = selectedMsgs.length;
+  const allSelected = displayMessages.length > 0 && displayMessages.every(message => selectedIds.has(message.id));
+  const someSelected = selectedCount > 0 && !allSelected;
+  const selectAllDisabled = displayMessages.length === 0 || isSearching || (!searchQuery.trim() && loadingMessages);
+  const selectAllLabel = scrollMode === 'paginated' && !searchQuery.trim()
+    ? (allSelected ? t('messageList.deselectCurrentPage') : t('messageList.selectCurrentPage'))
+    : (allSelected ? t('messageList.deselectLoadedMessages') : t('messageList.selectLoadedMessages'));
   const selectedAccountIds = [...new Set(selectedMsgs.map(m => m.account_id))];
   const canMove = selectedAccountIds.length === 1;
   const bulkMarkAsRead = selectedMsgs.some(m => !m.is_read);
@@ -3645,63 +3659,35 @@ export default function MessageList() {
           </div>
         )}
 
-        {loadingMessages && !searchQuery.trim() && displayMessages.length === 0 && (
-          <div>
-            {Array.from({ length: 7 }).map((_, i) => (
-              <div key={i} style={{
-                display: 'flex', alignItems: 'center', gap: 12,
-                padding: '12px 14px', borderBottom: '1px solid var(--border-subtle)',
-                opacity: 1 - i * 0.1,
-              }}>
-                <div className="skeleton-line" style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="skeleton-line" style={{ height: 12, width: `${55 + (i % 3) * 15}%`, marginBottom: 8 }} />
-                  <div className="skeleton-line" style={{ height: 11, width: `${70 + (i % 2) * 20}%` }} />
-                </div>
-                <div className="skeleton-line" style={{ width: 36, height: 11, flexShrink: 0, borderRadius: 4 }} />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!(loadingMessages && !searchQuery.trim()) && !isSearching && !searchLoadingMore && displayMessages.length === 0 && (
-          <EmptyState
-            folderSyncing={folderSyncing && !searchQuery.trim()}
-            searchQuery={searchQuery.trim()}
-            searchError={searchError}
-            unreadOnly={unreadOnly}
-            category={categorizationActive && selectedFolder === 'INBOX' && !activeGtdTab ? activeCategory : null}
-            selectedFolder={selectedFolder}
-            accounts={accounts}
-            onClearSearch={() => { setSearchQuery(''); }}
-            onRetrySearch={() => setSearchReloadToken(token => token + 1)}
-            onShowAll={() => setUnreadOnly(false)}
-            onCompose={() => openCompose({})}
-          />
-        )}
-
         {/* ── Bulk-action toolbar ───────────────────────────── */}
-        {selectionMode && (
           <div style={{
             position: 'sticky', top: 0, zIndex: 10,
             display: 'flex', alignItems: 'center', gap: 6,
-            padding: '7px 10px',
-            background: 'var(--bg-elevated)',
+            padding: '0 10px', minHeight: 44,
+            background: selectedCount > 0 ? 'var(--bg-elevated)' : 'var(--bg-primary)',
             borderBottom: '1px solid var(--border)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+            boxShadow: selectedCount > 0 ? '0 2px 8px rgba(0,0,0,0.18)' : 'none',
           }}>
             {/* Select-all checkbox */}
-            <input
-              type="checkbox"
-              checked={allSelected}
-              onChange={e => e.target.checked ? selectAll(displayMessages) : clearSelection()}
-              title={allSelected ? t('messageList.deselectAll') : t('messageList.selectAll')}
-              style={{ cursor: 'pointer', accentColor: 'var(--accent)', flexShrink: 0 }}
-            />
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 44, minHeight: 44, cursor: selectAllDisabled ? 'default' : 'pointer' }}>
+              <input
+                type="checkbox"
+                data-select-all
+                checked={allSelected}
+                ref={node => { if (node) node.indeterminate = someSelected; }}
+                aria-checked={someSelected ? 'mixed' : allSelected}
+                aria-label={selectAllLabel}
+                disabled={selectAllDisabled}
+                onChange={event => event.target.checked ? selectAll(displayMessages) : clearSelection()}
+                title={selectAllLabel}
+                style={{ cursor: selectAllDisabled ? 'default' : 'pointer', accentColor: 'var(--accent)', flexShrink: 0 }}
+              />
+            </label>
             <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, userSelect: 'none' }}>
-              {t('messageList.selectedCount', { count: selectedCount })}
+              {selectedCount > 0 && t('messageList.selectedCount', { count: selectedCount })}
             </span>
 
+            {selectedCount > 0 && <>
             {/* Mark read / unread button */}
             <BulkBtn
               title={bulkMarkAsRead ? t('messageList.markReadSelected') : t('messageList.markUnreadSelected')}
@@ -3996,7 +3982,43 @@ export default function MessageList() {
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
             </button>
+            </>}
           </div>
+
+
+        {loadingMessages && !searchQuery.trim() && displayMessages.length === 0 && (
+          <div>
+            {Array.from({ length: 7 }).map((_, i) => (
+              <div key={i} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '12px 14px', borderBottom: '1px solid var(--border-subtle)',
+                opacity: 1 - i * 0.1,
+              }}>
+                <div className="skeleton-line" style={{ width: 36, height: 36, borderRadius: '50%', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="skeleton-line" style={{ height: 12, width: `${55 + (i % 3) * 15}%`, marginBottom: 8 }} />
+                  <div className="skeleton-line" style={{ height: 11, width: `${70 + (i % 2) * 20}%` }} />
+                </div>
+                <div className="skeleton-line" style={{ width: 36, height: 11, flexShrink: 0, borderRadius: 4 }} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!(loadingMessages && !searchQuery.trim()) && !isSearching && !searchLoadingMore && displayMessages.length === 0 && (
+          <EmptyState
+            folderSyncing={folderSyncing && !searchQuery.trim()}
+            searchQuery={searchQuery.trim()}
+            searchError={searchError}
+            unreadOnly={unreadOnly}
+            category={categorizationActive && selectedFolder === 'INBOX' && !activeGtdTab ? activeCategory : null}
+            selectedFolder={selectedFolder}
+            accounts={accounts}
+            onClearSearch={() => { setSearchQuery(''); }}
+            onRetrySearch={() => setSearchReloadToken(token => token + 1)}
+            onShowAll={() => setUnreadOnly(false)}
+            onCompose={() => openCompose({})}
+          />
         )}
 
         {threadedView && !searchQuery.trim() ? (

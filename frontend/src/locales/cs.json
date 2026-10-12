@@ -327,7 +327,11 @@
         "label": "Doručená pošta",
         "description": "Husté řádky přes celou šířku; zprávy otevřete kliknutím"
       }
-    }
+    },
+    "selectCurrentPage": "Vybrat aktuální stránku",
+    "deselectCurrentPage": "Zrušit výběr aktuální stránky",
+    "selectLoadedMessages": "Vybrat načtené zprávy",
+    "deselectLoadedMessages": "Zrušit výběr načtených zpráv"
   },
   "message": {
     "find": {

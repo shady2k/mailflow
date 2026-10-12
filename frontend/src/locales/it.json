@@ -468,7 +468,11 @@
         "label": "Posta in arrivo",
         "description": "Righe compatte a tutta larghezza; apri i messaggi con un clic"
       }
-    }
+    },
+    "selectCurrentPage": "Seleziona la pagina corrente",
+    "deselectCurrentPage": "Deseleziona la pagina corrente",
+    "selectLoadedMessages": "Seleziona i messaggi caricati",
+    "deselectLoadedMessages": "Deseleziona i messaggi caricati"
   },
   "lockScreen": {
     "subtitle": "Inserisci il PIN per sbloccare",

@@ -468,7 +468,11 @@
         "label": "Posteingang",
         "description": "Kompakte Zeilen in voller Breite; Nachrichten per Klick öffnen"
       }
-    }
+    },
+    "selectCurrentPage": "Aktuelle Seite auswählen",
+    "deselectCurrentPage": "Auswahl der aktuellen Seite aufheben",
+    "selectLoadedMessages": "Geladene Nachrichten auswählen",
+    "deselectLoadedMessages": "Auswahl geladener Nachrichten aufheben"
   },
   "lockScreen": {
     "subtitle": "Gib deine PIN zum Entsperren ein",

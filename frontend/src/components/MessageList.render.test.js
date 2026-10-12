@@ -681,7 +681,7 @@ test('bulk archive reconciles partial failure without double decrement or a stal
   await mountCategories({rows:[MESSAGE,second],counts:{primary:1},totals:{primary:2}});
   await React.act(async()=>useStore.getState().setSelectedMessage(MESSAGE.id));
   await React.act(async()=>shortcutBus.emit('selectMessage'));
-  const select=container.querySelector('[title="messageList.selectAll"]');
+  const select=container.querySelector('input[data-select-all]');
   assert.ok(select);
   await React.act(async()=>select.click());
   const clock=captureUndoCommits();let resolveArchive;api.bulkArchive=()=>new Promise(resolve=>{resolveArchive=resolve;});
@@ -782,4 +782,88 @@ test('connection catch-up during archive undo delay cannot restore removed rows/
     assert.equal(useStore.getState().categoryCounts.primary,1);
     assert.equal(useStore.getState().messages.some(m=>m.id===MESSAGE.id),true);
   } finally {clock.restore();api.bulkArchive=oldArchive;deleteGuards.clearDeleteGuard(MESSAGE.id);await React.act(async()=>root.unmount());root=null;}
+});
+
+const selectAllCheckbox = () => container.querySelector('input[data-select-all]');
+test('paginated select-all is visible before selection, native mixed when partial, and actions require selected rows', async () => {
+  useStore.setState({scrollMode:'paginated'});
+  const second={...MESSAGE,id:'select-second',uid:2,message_id:'<select-second@example.invalid>'};
+  await mount({rows:[MESSAGE,second],threadedView:false});
+  assert.equal(useStore.getState().messages.length,2);
+  const input=selectAllCheckbox();assert.ok(input);assert.equal(input.disabled,false);assert.equal(input.checked,false);
+  assert.equal(input.getAttribute('aria-label'),'messageList.selectCurrentPage');
+  assert.equal(container.querySelector('[title="messageList.archiveSelected"]'),null);
+  await React.act(async()=>container.querySelector('[title="messageList.selectMessages"]').click());
+  assert.equal(container.querySelector('[title="messageList.archiveSelected"]'),null);
+  await React.act(async()=>input.click());assert.equal(input.checked,true);
+  assert.ok(container.querySelector('[title="messageList.archiveSelected"]'));
+  const rowCheck=container.querySelector('input[type="checkbox"]:not([data-select-all])') || draggableIn('msg-1');
+  assert.ok(rowCheck);await React.act(async()=>rowCheck.click());
+  assert.equal(input.indeterminate,true);assert.equal(input.getAttribute('aria-checked'),'mixed');
+  await React.act(async()=>input.click());assert.equal(input.checked,true);assert.equal(input.indeterminate,false);
+  await React.act(async()=>input.click());assert.equal(input.checked,false);
+  assert.equal(container.querySelector('[title="messageList.archiveSelected"]'),null);
+  await React.act(async()=>root.unmount());root=null;
+  await mount({rows:[],threadedView:false});assert.equal(selectAllCheckbox().disabled,true);
+  await React.act(async()=>root.unmount());root=null;
+});
+test('select-all follows loaded search rows and clearing or navigating discards previous selection', async () => {
+  const oldSearch=api.search;api.search=async()=>({messages:[{...MESSAGE,id:'search-only'}]});
+  await mount({rows:[MESSAGE],threadedView:false});await React.act(async()=>selectAllCheckbox().click());
+  await React.act(async()=>{useStore.getState().setSearchQuery('Synthetic');});
+  await React.act(async()=>new Promise(resolve=>setTimeout(resolve,320)));
+  assert.equal(selectAllCheckbox().checked,false);assert.equal(selectAllCheckbox().disabled,false);
+  assert.equal(selectAllCheckbox().getAttribute('aria-label'),'messageList.selectLoadedMessages');
+  await React.act(async()=>selectAllCheckbox().click());assert.equal(selectAllCheckbox().checked,true);
+  await React.act(async()=>useStore.getState().setSearchQuery(''));assert.equal(selectAllCheckbox().checked,false);
+  await React.act(async()=>selectAllCheckbox().click());
+  await React.act(async()=>useStore.setState({selectedFolder:'Archive'}));
+  assert.equal(selectAllCheckbox().checked,false);assert.equal(container.querySelector('[title="messageList.archiveSelected"]'),null);
+  api.search=oldSearch;await React.act(async()=>root.unmount());root=null;
+});
+test('paginated select-all archives only current loaded page and threaded rows retain existing selection', async () => {
+  const originalGet=api.getMessages,originalArchive=api.bulkArchive;
+  const first=[MESSAGE,{...MESSAGE,id:'page1-second',message_id:'<page1-second@example.invalid>'}],second=[{...MESSAGE,id:'page2-first',message_id:'<page2-first@example.invalid>'},{...MESSAGE,id:'page2-second',message_id:'<page2-second@example.invalid>'}];
+  let resolvePage;
+  api.getMessages=params=>params.offset ? new Promise(resolve=>{resolvePage=resolve;}) : Promise.resolve({messages:first,total:200});
+  useStore.setState({scrollMode:'paginated',pageSize:2});
+  await mount({rows:first,threadedView:false});await React.act(async()=>selectAllCheckbox().click());
+  const next=[...container.querySelectorAll('button')].find(button=>button.textContent.includes('messageList.nextPage'));
+  assert.ok(next);await React.act(async()=>next.click());
+  assert.equal(selectAllCheckbox().disabled,true,'old page rows cannot be selected while next page is pending');
+  await React.act(async()=>selectAllCheckbox().click());
+  assert.equal(selectAllCheckbox().checked,false);
+  await React.act(async()=>resolvePage({messages:second,total:200}));
+  assert.equal(selectAllCheckbox().disabled,false);
+  assert.equal(selectAllCheckbox().checked,false);assert.equal(container.querySelector('[title="messageList.archiveSelected"]'),null);
+  await React.act(async()=>selectAllCheckbox().click());const clock=captureUndoCommits();let archived;
+  api.bulkArchive=async ids=>{archived=ids;return {archived:ids};};
+  try {
+    await React.act(async()=>container.querySelector('[title="messageList.archiveSelected"]').click());
+    await React.act(async()=>clock.callbacks[0]());
+    assert.deepEqual(archived,second.map(message=>message.id));
+    assert.equal(selectAllCheckbox().checked,false);
+  } finally {clock.restore();second.forEach(message=>deleteGuards.clearDeleteGuard(message.id));api.getMessages=originalGet;api.bulkArchive=originalArchive;await React.act(async()=>root.unmount());root=null;useStore.setState({scrollMode:'infinite',pageSize:50});}
+  useStore.setState({scrollMode:'paginated'});
+  await mount({rows:[THREAD],threadedView:true});assert.equal(selectAllCheckbox().checked,false);
+  await React.act(async()=>selectAllCheckbox().click());assert.equal(selectAllCheckbox().checked,true);
+  await React.act(async()=>root.unmount());root=null;
+});
+
+test('infinite select-all includes loaded rows only and newly appended rows remain unselected', async () => {
+  useStore.setState({scrollMode:'infinite'});
+  const second={...MESSAGE,id:'infinite-second',uid:2,message_id:'<infinite-second@example.invalid>'};
+  await mount({rows:[MESSAGE,second],threadedView:false});
+  await React.act(async()=>useStore.setState({messagesTotal:200}));
+  assert.ok(selectAllCheckbox());assert.equal(selectAllCheckbox().getAttribute('aria-label'),'messageList.selectLoadedMessages');
+  await React.act(async()=>selectAllCheckbox().click());assert.equal(selectAllCheckbox().checked,true);
+  const third={...MESSAGE,id:'newly-loaded',uid:3,message_id:'<newly-loaded@example.invalid>'};
+  await React.act(async()=>useStore.getState().appendMessages([third]));
+  assert.equal(selectAllCheckbox().indeterminate,true);
+  assert.equal(selectAllCheckbox().getAttribute('aria-label'),'messageList.selectLoadedMessages');
+  await React.act(async()=>selectAllCheckbox().click());assert.equal(selectAllCheckbox().checked,true);
+  assert.equal(selectAllCheckbox().getAttribute('aria-label'),'messageList.deselectLoadedMessages');
+  await React.act(async()=>selectAllCheckbox().click());assert.equal(selectAllCheckbox().checked,false);
+  assert.equal(container.querySelector('[title="messageList.archiveSelected"]'),null);
+  await React.act(async()=>root.unmount());root=null;
 });

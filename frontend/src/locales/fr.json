@@ -468,7 +468,11 @@
         "label": "Boîte de réception",
         "description": "Lignes compactes sur toute la largeur ; ouvrir par un clic"
       }
-    }
+    },
+    "selectCurrentPage": "Sélectionner la page actuelle",
+    "deselectCurrentPage": "Désélectionner la page actuelle",
+    "selectLoadedMessages": "Sélectionner les messages chargés",
+    "deselectLoadedMessages": "Désélectionner les messages chargés"
   },
   "lockScreen": {
     "subtitle": "Saisissez votre PIN pour déverrouiller",

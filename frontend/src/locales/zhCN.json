@@ -468,7 +468,11 @@
         "label": "收件箱",
         "description": "全宽紧凑列表；点击打开邮件"
       }
-    }
+    },
+    "selectCurrentPage": "选择当前页",
+    "deselectCurrentPage": "取消选择当前页",
+    "selectLoadedMessages": "选择已加载的邮件",
+    "deselectLoadedMessages": "取消选择已加载的邮件"
   },
   "lockScreen": {
     "subtitle": "输入 PIN 码以解锁",

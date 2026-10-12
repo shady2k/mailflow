@@ -468,7 +468,11 @@
         "label": "Caixa de entrada",
         "description": "Linhas compactas em largura total; abra mensagens com um clique"
       }
-    }
+    },
+    "selectCurrentPage": "Selecionar a página atual",
+    "deselectCurrentPage": "Desmarcar a página atual",
+    "selectLoadedMessages": "Selecionar mensagens carregadas",
+    "deselectLoadedMessages": "Desmarcar mensagens carregadas"
   },
   "lockScreen": {
     "subtitle": "Digite seu PIN para desbloquear",

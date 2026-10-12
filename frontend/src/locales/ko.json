@@ -468,7 +468,11 @@
       }
     },
     "noAccountsDesc": "시작하려면 이메일 계정을 추가하세요",
-    "changeLayout": "레이아웃 변경"
+    "changeLayout": "레이아웃 변경",
+    "selectCurrentPage": "현재 페이지 선택",
+    "deselectCurrentPage": "현재 페이지 선택 해제",
+    "selectLoadedMessages": "불러온 메일 선택",
+    "deselectLoadedMessages": "불러온 메일 선택 해제"
   },
   "lockScreen": {
     "unlockButton": "잠금 해제",

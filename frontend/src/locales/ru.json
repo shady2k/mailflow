@@ -468,7 +468,11 @@
         "label": "Входящие",
         "description": "Плотные строки на всю ширину; письмо открывается по клику"
       }
-    }
+    },
+    "selectCurrentPage": "Выбрать текущую страницу",
+    "deselectCurrentPage": "Снять выбор на текущей странице",
+    "selectLoadedMessages": "Выбрать загруженные письма",
+    "deselectLoadedMessages": "Снять выбор загруженных писем"
   },
   "lockScreen": {
     "subtitle": "Введите PIN-код для разблокировки",

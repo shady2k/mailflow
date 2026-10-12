@@ -468,7 +468,11 @@
         "label": "Bandeja de entrada",
         "description": "Filas compactas a todo el ancho; abrir mensajes con un clic"
       }
-    }
+    },
+    "selectCurrentPage": "Seleccionar la página actual",
+    "deselectCurrentPage": "Deseleccionar la página actual",
+    "selectLoadedMessages": "Seleccionar mensajes cargados",
+    "deselectLoadedMessages": "Deseleccionar mensajes cargados"
   },
   "lockScreen": {
     "subtitle": "Introduce tu PIN para desbloquear",
