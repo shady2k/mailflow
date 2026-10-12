@@ -33,11 +33,11 @@ suite('PostgreSQL C-locale full-body search and durable queue', () => {
       name text, email_address text, color text, enabled boolean DEFAULT true, protocol text DEFAULT 'imap');
       CREATE TABLE messages (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), account_id uuid, uid integer,
       folder text DEFAULT 'INBOX', message_id text, subject text, from_name text, from_email text,
-      date timestamptz DEFAULT '2026-01-01', is_deleted boolean DEFAULT false, body_text text, body_html text,
+      attachments jsonb, date timestamptz DEFAULT '2026-01-01', is_deleted boolean DEFAULT false, body_text text, body_html text,
       to_addresses jsonb, cc_addresses jsonb, in_reply_to text, thread_references text[], snippet text,
       is_read boolean DEFAULT false, is_starred boolean DEFAULT false, has_attachments boolean DEFAULT false)`);
     if (process.env.SEARCH_TEST_NO_ICU) await query('CREATE COLLATION mailflow_search FROM "C"');
-    const migrations = ['0066_unicode_body_index.sql', '0067_unicode_search_indexes.sql', '0068_body_index_controls.sql'];
+    const migrations = ['0066_unicode_body_index.sql', '0067_unicode_search_indexes.sql', '0068_body_index_controls.sql', '0069_render_body_cache.sql'];
     for (const file of migrations) {
       const sql = await readFile(new URL('../../migrations/' + file, import.meta.url), 'utf8');
       if (file.startsWith('0067')) {
@@ -92,6 +92,31 @@ suite('PostgreSQL C-locale full-body search and durable queue', () => {
     assert.equal(rows[1].body_index_attempts, 0);
     assert.equal(rows[2].body_index_error, 'fetch_failed');
     assert.ok(rows[2].body_index_lease_until);
+  });
+
+  it('keeps display cache and complete search text separate, with identity invalidation', async () => {
+    const m = await insert(a, 71);
+    const sqlErrors = [];
+    await new BodyIndexer({ query: async (sql, values) => {
+      try { return await query(sql, values); } catch (error) { sqlErrors.push(error.message); throw error; }
+    }, fetchBody: async () => ({ found: true,
+      text: 'Full searchable text includes later MIME parts', html: null,
+      readerBody: { text: 'Primary render text', html: '<p>Primary HTML</p>', attachments: [] },
+    }) }).tick();
+    const saved = (await query('SELECT * FROM messages WHERE id=$1', [m.id])).rows[0];
+    assert.deepEqual(sqlErrors, []);
+    assert.equal(saved.body_text, 'Primary render text');
+    assert.equal(saved.body_html, '<p>Primary HTML</p>');
+    assert.ok(saved.body_render_cached_at);
+    assert.ok(saved.body_indexed_at);
+    assert.match(saved.search_body_text, /later MIME/);
+    await query('UPDATE messages SET message_id=$1 WHERE id=$2', ['<changed@lab.test>',m.id]);
+    const invalidated = (await query('SELECT * FROM messages WHERE id=$1', [m.id])).rows[0];
+    assert.equal(invalidated.search_body_text, null);
+    assert.equal(invalidated.body_render_cached_at, null);
+    await query("UPDATE messages SET body_render_cached_at=now() WHERE id=$1", [m.id]);
+    await query("UPDATE messages SET body_text='Changed draft' WHERE id=$1", [m.id]);
+    assert.equal((await query('SELECT body_render_cached_at FROM messages WHERE id=$1', [m.id])).rows[0].body_render_cached_at, null);
   });
 
   it('folds Cyrillic and English under C and matches the same expression index', async () => {

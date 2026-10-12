@@ -93,7 +93,7 @@ const RELOCATE_COPY_COLS = [
   'list_unsubscribe_post', 'unsubscribed_at', 'delivery_addresses', 'plugin_annotations',
   'sender_name', 'sender_email', 'forwarded_from_name', 'forwarded_from_email', 'forwarded_via',
   'bcc_addresses', 'search_body_text', 'body_indexed_at', 'body_index_attempts',
-  'body_index_retry_at', 'body_index_lease_until', 'body_index_error',
+  'body_index_retry_at', 'body_index_lease_until', 'body_index_error', 'body_render_cached_at',
 ];
 // INSERT target list and the matching SELECT projection. account_id + the carried columns come
 // from the deleted row; uid is the UIDPLUS-mapped new uid; folder is the destination ($4).
@@ -411,6 +411,7 @@ router.get('/messages/:id/body', async (req, res) => {
 
   if (!result.rows.length) return res.status(404).json({ error: 'Message not found' });
   const message = result.rows[0];
+  imapManager.noteUserActivity(message.account_id);
 
   // Return cached body if available — but re-fetch when the cached HTML still
   // contains unresolved cid: references, or http:// image URLs that were cached
@@ -424,7 +425,7 @@ router.get('/messages/:id/body', async (req, res) => {
     // CSS url(http://) in inline style attributes or <style> blocks
     /url\(\s*['"]?http:\/\//i.test(message.body_html)
   );
-  if ((message.body_html || message.body_text) && !hasCidRefs && !hasHttpImgs) {
+  if (message.body_render_cached_at || ((message.body_html || message.body_text) && !hasCidRefs && !hasHttpImgs)) {
     const attachments = message.attachments
       ? (typeof message.attachments === 'string' ? JSON.parse(message.attachments) : message.attachments)
       : [];
@@ -474,7 +475,7 @@ router.get('/messages/:id/body', async (req, res) => {
       responseHtml = blockRemoteImages(html);
       hasBlockedRemoteImages = true;
     }
-    return res.json({ html: responseHtml, text: message.body_text, attachments, hasBlockedRemoteImages, senderEmail: message.sender_email, senderName: message.sender_name, forwardedFromEmail: message.forwarded_from_email, forwardedFromName: message.forwarded_from_name, forwardedVia: message.forwarded_via, bccAddresses: bccOf(message) });
+    return res.json({ html: responseHtml, text: message.body_text, attachments, complete: true, hasBlockedRemoteImages, senderEmail: message.sender_email, senderName: message.sender_name, forwardedFromEmail: message.forwarded_from_email, forwardedFromName: message.forwarded_from_name, forwardedVia: message.forwarded_via, bccAddresses: bccOf(message) });
   }
 
   // Fetch from IMAP — signal user activity so background jobs back off during this request.
@@ -483,7 +484,7 @@ router.get('/messages/:id/body', async (req, res) => {
     const account = accountResult.rows[0];
     imapManager.noteUserActivity(account.id);
 
-    const { html, text, attachments } = await fetchWithTimeout(
+    const { html, text, attachments, renderComplete } = await fetchWithTimeout(
       imapManager.fetchMessageBody(account, message.uid, message.folder),
       BODY_FETCH_TIMEOUT_MS
     );
@@ -494,14 +495,18 @@ router.get('/messages/:id/body', async (req, res) => {
 
     // Only cache when we actually got body content — don't overwrite a prior
     // successful cache with null if a transient IMAP fetch returns nothing.
-    if (safeHtml || text || (attachments && attachments.length > 0)) {
-      await query(
+    if (renderComplete !== false && (renderComplete || safeHtml != null || text != null || (attachments && attachments.length > 0))) {
+      const cached = await query(
         `UPDATE messages
-         SET body_html = $1, body_text = $2, attachments = $3,
+         SET body_html = $1, body_text = $2, attachments = $3, body_render_cached_at = CASE WHEN $11 THEN now() ELSE NULL END,
              snippet = CASE WHEN $5 != '' THEN $5 ELSE snippet END
-         WHERE id = $4`,
-        [safeHtml, safeText, JSON.stringify(attachments || []), id, snip]
+         WHERE id = $4 AND uid = $6 AND folder = $7 AND message_id IS NOT DISTINCT FROM $8
+           AND body_text IS NOT DISTINCT FROM $9 AND body_html IS NOT DISTINCT FROM $10
+         RETURNING id`,
+        [safeHtml, safeText, JSON.stringify(attachments || []), id, snip,
+          message.uid, message.folder, message.message_id, message.body_text, message.body_html, renderComplete === true]
       );
+      if (!cached.rows.length) return res.status(409).json({ error: 'Message changed while loading. Please reopen it.' });
     }
 
     // Apply remote-image blocking at response time — safeHtml (unblocked) is what
@@ -513,7 +518,7 @@ router.get('/messages/:id/body', async (req, res) => {
       responseHtml = blockRemoteImages(safeHtml);
       hasBlockedRemoteImages = true;
     }
-    res.json({ html: responseHtml, text: safeText, attachments: attachments || [], hasBlockedRemoteImages, senderEmail: message.sender_email, senderName: message.sender_name, forwardedFromEmail: message.forwarded_from_email, forwardedFromName: message.forwarded_from_name, forwardedVia: message.forwarded_via, bccAddresses: bccOf(message) });
+    res.json({ html: responseHtml, text: safeText, attachments: attachments || [], complete: renderComplete === true, hasBlockedRemoteImages, senderEmail: message.sender_email, senderName: message.sender_name, forwardedFromEmail: message.forwarded_from_email, forwardedFromName: message.forwarded_from_name, forwardedVia: message.forwarded_via, bccAddresses: bccOf(message) });
   } catch (err) {
     const msg = err.message || 'Unknown error';
     console.error('Body fetch error:', msg);
@@ -834,6 +839,8 @@ router.patch('/messages/:id/read', async (req, res) => {
 
   if (!result.rows.length) return res.status(404).json({ error: 'Message not found' });
   const message = result.rows[0];
+
+  imapManager.noteUserActivity(message.account_id);
 
   // Run DB update and account fetch concurrently — no dependency between them.
   // read_changed_at tells the IMAP sync not to overwrite this change for 30 s,

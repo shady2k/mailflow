@@ -104,7 +104,12 @@ export default function ConversationMessageCard({ message, expanded, onToggle, o
       load: (id, remoteImages) => api.getMessageBody(id, remoteImages),
       isCancelled: () => !mountedRef.current,
     })
-      .then(data => { if (mountedRef.current) setBody(data); })
+      .then(data => {
+        if (mountedRef.current) {
+          setBody(data);
+          if (data.complete === false) fetchedRef.current = null;
+        }
+      })
       .catch(err => {
         if (!mountedRef.current) return;
         setError(err.message);

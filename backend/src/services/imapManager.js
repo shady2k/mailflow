@@ -1111,7 +1111,7 @@ export async function insertCopiedSibling(accountId, uid, fromFolder, toFolder, 
       read_changed_at, star_changed_at, spam_score_sa, spam_score_ml,
       spam_verdict, spam_analyzed_at, spam_details, spam_user_override,
       category, list_unsubscribe, list_unsubscribe_post, unsubscribed_at, delivery_addresses, sender_name, sender_email,
-      forwarded_from_name, forwarded_from_email, forwarded_via, bcc_addresses, search_body_text, body_indexed_at, body_index_attempts, body_index_retry_at, body_index_lease_until, body_index_error, plugin_annotations
+      forwarded_from_name, forwarded_from_email, forwarded_via, bcc_addresses, search_body_text, body_indexed_at, body_index_attempts, body_index_retry_at, body_index_lease_until, body_index_error, body_render_cached_at, plugin_annotations
     )
     SELECT
       account_id, $4, $5, message_id, subject,
@@ -1122,7 +1122,7 @@ export async function insertCopiedSibling(accountId, uid, fromFolder, toFolder, 
       read_changed_at, star_changed_at, spam_score_sa, spam_score_ml,
       spam_verdict, spam_analyzed_at, spam_details, spam_user_override,
       category, list_unsubscribe, list_unsubscribe_post, unsubscribed_at, delivery_addresses, sender_name, sender_email,
-      forwarded_from_name, forwarded_from_email, forwarded_via, bcc_addresses, search_body_text, body_indexed_at, body_index_attempts, body_index_retry_at, body_index_lease_until, body_index_error, plugin_annotations
+      forwarded_from_name, forwarded_from_email, forwarded_via, bcc_addresses, search_body_text, body_indexed_at, body_index_attempts, body_index_retry_at, body_index_lease_until, body_index_error, body_render_cached_at, plugin_annotations
     FROM messages
     WHERE account_id = $1 AND folder = $2 AND uid = $3
     ON CONFLICT (account_id, uid, folder) DO NOTHING
@@ -5960,6 +5960,8 @@ export class ImapManager {
       let html = null;
       let text = null;
       let attachments;
+      let readerBody;
+      let renderComplete;
       // Always address by UID string with uid:true option — direct UID FETCH avoids
       // the two-step SEARCH+FETCH path that object-range syntax triggers, which can
       // silently return nothing on stale connections or when a server-side search
@@ -6059,13 +6061,14 @@ export class ImapManager {
         // direct text result overwrites any malformed batched value. Inline
         // images keep the batched value because they are binary and are not
         // parsed as HTML.
+        let textFetchFailed = false;
         for (const part of results.textParts) {
           try {
             for await (const msg of client.fetch(uidStr, { uid: true, bodyParts: [part.part] }, { uid: true })) {
               const v = msg.bodyParts?.get(part.part);
-              if (v != null && (searchOnly || v.length > 0)) prefetched.set(part.part, v);
+              if (v != null) prefetched.set(part.part, v);
             }
-          } catch (err) { if (searchOnly) throw err; /* reader tolerates partial content */ }
+          } catch (err) { if (searchOnly) throw err; textFetchFailed = true; }
         }
 
         // Inline images normally keep the batched value for performance. Retry
@@ -6083,6 +6086,18 @@ export class ImapManager {
           } catch { /* keep the batched value if the direct retry fails */ }
         }
 
+        readerBody = searchOnly && calendarParts.length === 0 ? {
+          html: null, text: null, attachments,
+        } : null;
+        if (readerBody) {
+          for (const part of results.textParts) {
+            const buf = prefetched.get(part.part);
+            if (buf == null) continue;
+            const key = part.type === 'text/html' ? 'html' : part.type === 'text/plain' ? 'text' : null;
+            if (key && readerBody[key] == null) readerBody[key] = decodeBody(buf, part.encoding, part.charset);
+          }
+        }
+        renderComplete = !textFetchFailed && [...results.textParts, ...calendarParts].every(part => prefetched.has(part.part));
         const completeSearch = searchOnly ? collectSearchMime([...results.textParts, ...calendarParts], prefetched, decodeBody) : null;
         for (const part of results.textParts) {
           const buf = prefetched.get(part.part);
@@ -6156,7 +6171,7 @@ export class ImapManager {
 
       // Some malformed emails include NUL bytes that PostgreSQL rejects in text
       // columns. Strip them once here so all callers are safe.
-      return { html: sanitizeStr(html), text: sanitizeStr(text), attachments, ...(searchOnly ? { found: true } : {}) };
+      return { html: sanitizeStr(html), text: sanitizeStr(text), attachments, found: true, renderComplete, ...(readerBody ? { readerBody } : {}) };
     });
 
     // Providers flagged preferFreshBodyFetch (e.g. PurelyMail) skip the shared pool on the

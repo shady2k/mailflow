@@ -445,7 +445,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
     // requested images for this message so we re-fetch with ?remoteImages=1.
     const wantsImages = imagesRequestedRef.current.has(selectedMessageId);
     const cached = bodyCache.current[selectedMessageId];
-    if (cached && (cached.html || cached.text)) {
+    if (cached && (cached.html || cached.text || cached.attachments?.length || cached.complete)) {
       if (!wantsImages || !cached.hasBlockedRemoteImages) {
         setBody(cached);
         setBodyError(null);
@@ -485,8 +485,8 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
     fetchWithRetry(selectedMessageId)
       .then(data => {
         if (cancelled) return;
-        // Only cache if there's real content — empty results can be retried
-        if (data.html || data.text) {
+        // Do not retain partial IMAP responses; verified empty messages are cacheable.
+        if (data.complete !== false && (data.html || data.text || data.attachments?.length || data.complete)) {
           bodyCache.current[selectedMessageId] = data;
           bodyCacheOrder.current.push(selectedMessageId);
           // Evict oldest entry when cache exceeds 50 messages

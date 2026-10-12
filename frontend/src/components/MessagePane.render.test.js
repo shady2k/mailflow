@@ -843,3 +843,31 @@ describe('the Bcc line', () => {
     assert.doesNotMatch(text, /Bcc/);
   });
 });
+
+describe('verified render cache on revisits', () => {
+  const settle = () => React.act(async () => { return new Promise(resolve => setTimeout(resolve, 10)); });
+  test('keeps a verified empty body but retries a partial response on revisit', async () => {
+    const originalFetch = globalThis.fetch;
+    try {
+      for (const complete of [true, false]) {
+        const requests = [];
+        globalThis.fetch = async url => {
+          const id = /\/messages\/([^/]+)\/body/.exec(String(url))?.[1];
+          if (id) requests.push(id);
+          return { ok: true, status: 200, json: async () => id ? { html: null, text: complete ? '' : 'Partial text', attachments: [], complete } : {} };
+        };
+        await React.act(async () => {
+          useStore.getState().setMessages?.([MSG_A, MSG_B]);
+          useStore.getState().setSelectedMessage('a1');
+          root.render(React.createElement(MessagePane, { key: 'render-cache-' + complete }));
+        });
+        await settle();
+        await React.act(async () => { useStore.getState().setSelectedMessage('b2'); });
+        await settle();
+        await React.act(async () => { useStore.getState().setSelectedMessage('a1'); });
+        await settle();
+        assert.equal(requests.filter(id => id === 'a1').length, complete ? 1 : 2);
+      }
+    } finally { globalThis.fetch = originalFetch; }
+  });
+});

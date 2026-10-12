@@ -1,3 +1,4 @@
+import { sanitizeEmail } from './emailSanitizer.js';
 import { Parser } from 'htmlparser2';
 
 export function searchableBody({ text, html }) {
@@ -75,12 +76,24 @@ export class BodyIndexer {
       const body = await this.fetchBody(row.account, row.uid, row.folder);
       if (!body.found && body.text == null && body.html == null) throw Object.assign(new Error('Message body unavailable'), { code: 'body_unavailable' });
       const text = searchableBody(body);
+      let cachedText = row.body_text, cachedHtml = row.body_html;
+      if (body.readerBody && row.body_text == null && row.body_html == null
+          && !/\bcid:/i.test(body.readerBody.html || '')) {
+        cachedText = body.readerBody.text?.replace(/\0/g, '') ?? null;
+        cachedHtml = body.readerBody.html == null ? null : sanitizeEmail(body.readerBody.html).replace(/\0/g, '');
+        const cache = await this.query(`UPDATE messages SET body_text = $1, body_html = $2,
+          attachments = $3, body_render_cached_at = now()
+          WHERE id = $4 AND uid = $5 AND folder = $6 AND message_id IS NOT DISTINCT FROM $7
+            AND NOT is_deleted AND body_text IS NULL AND body_html IS NULL RETURNING id`,
+        [cachedText, cachedHtml, JSON.stringify(body.readerBody.attachments || []), row.id, row.uid, row.folder, row.message_id]);
+        if (!cache.rows.length) return;
+      }
       await this.query(`UPDATE messages SET search_body_text = $1, body_indexed_at = now(),
         body_index_error = NULL, body_index_retry_at = NULL, body_index_lease_until = NULL
         WHERE id = $2 AND uid = $3 AND folder = $4
           AND message_id IS NOT DISTINCT FROM $5 AND NOT is_deleted
           AND body_text IS NOT DISTINCT FROM $6 AND body_html IS NOT DISTINCT FROM $7`,
-      [text, row.id, row.uid, row.folder, row.message_id, row.body_text, row.body_html]);
+      [text, row.id, row.uid, row.folder, row.message_id, cachedText, cachedHtml]);
     } catch (err) {
       if (err.backgroundDeferred) {
         await this.query(`UPDATE messages SET body_index_lease_until = NULL,

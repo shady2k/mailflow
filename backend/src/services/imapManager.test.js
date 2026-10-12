@@ -1816,6 +1816,64 @@ describe('calendar-only messages', () => {
   });
 });
 
+// The body route caches the list fetchMessageBody returns, and every download route
+// resolves parts from that cache, so a part missing from it cannot be opened at all.
+// Most of these drive the real fetchMessageBody and fetchAttachment through the pool
+// against a fake server holding one message; the synced-body cases call
+// extractBodyFromMsg, which lists the same parts.
+describe('inline images the body never shows are listed as attachments', () => {
+  let seq = 700;
+  function serve(structure, parts) {
+    const account = { id: `acct-parts-${++seq}`, user_id: 'u1', imap_host: 'imap.example.test', email_address: 'p@example.test', auth_user: 'p', auth_pass: 'enc' };
+    ImapFlow.mockImplementation(function () {
+      const client = new EventEmitter();
+      client.usable = true;
+      client.connect = vi.fn(() => Promise.resolve());
+      client.logout = vi.fn(() => Promise.resolve());
+      client.close = vi.fn();
+      client.getMailboxLock = vi.fn(async () => ({ release() {} }));
+      client.fetch = vi.fn(async function* (range, fetchQuery) {
+        yield {
+          uid: 42,
+          bodyStructure: fetchQuery.bodyStructure ? structure : undefined,
+          bodyParts: fetchQuery.bodyParts
+            ? new Map(fetchQuery.bodyParts.filter(p => p in parts).map(p => [p, Buffer.from(parts[p])]))
+            : undefined,
+        };
+      });
+      return client;
+    });
+    getConnectionPolicy.mockResolvedValue({ allowPrivateHosts: true, allowInsecureTls: true });
+    resolveForConnection.mockResolvedValue({ host: '127.0.0.1', addresses: ['127.0.0.1'], servername: null });
+    return { mgr: new ImapManager({ clients: new Set() }), account };
+  }
+
+  it('does not declare a reader cache complete when expected MIME text is missing', async () => {
+    const { mgr, account } = serve({ type: 'multipart/mixed', childNodes: [
+      { part: '1', type: 'text/plain', encoding: '7bit' },
+    ] }, {});
+    const body = await mgr.fetchMessageBody(account, 42, 'INBOX');
+    expect(body.found).toBe(true);
+    expect(body.renderComplete).toBe(false);
+  });
+
+  it('keeps all search MIME text separate from the first display body', async () => {
+    const { mgr, account } = serve({ type: 'multipart/mixed', childNodes: [
+      { part: '1', type: 'text/plain', encoding: '7bit' },
+      { part: '2', type: 'text/plain', encoding: '7bit' },
+      { part: '3', type: 'text/html', encoding: '7bit' },
+      { part: '4', type: 'text/html', encoding: '7bit' },
+    ] }, { '1': 'Primary plain', '2': 'Later plain', '3': '<p>Primary HTML</p>', '4': '<p>Later HTML</p>' });
+    const body = await mgr.fetchMessageBody(account, 42, 'INBOX', { searchOnly: true });
+    expect(body.text).toContain('Later plain');
+    expect(body.html).toContain('Later HTML');
+    expect(body.readerBody.text).toBe('Primary plain');
+    expect(body.readerBody.html).toBe('<p>Primary HTML</p>');
+    expect(body.found).toBe(true);
+  });
+
+});
+
 // ── _shouldAutoBackfillOnConnect — auto-backfill gate (#354) ──────────────────
 // The gate itself was always correct; #354 was the connect flow evaluating it
 // AFTER the initial INBOX sync inserted rows. These lock the gate contract:
