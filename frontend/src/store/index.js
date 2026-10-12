@@ -1,3 +1,4 @@
+import { isAccountInUnifiedInbox } from '../utils/unifiedInbox.js';
 import { create } from 'zustand';
 import { resolveConversationMode, groupsMessageList, conversationModeTransition, isConversationMode } from '../utils/conversationMode.js';
 import { api } from '../utils/api.js';
@@ -143,7 +144,7 @@ export const useStore = create((set, get) => ({
         threadMessages: {}, expandedThreadId: null,
         accounts: [], accountsReady: false, folders: {},
         notifications: [], backfillProgress: {},
-        gtdSections: null, categoryCounts: {}, activeGtdTab: null,
+        gtdSections: null, categoryCounts: {}, categoryTotals: null, categoryCountScope: null, activeGtdTab: null,
         // Reply-draft lookups and handoffs still in flight stop on the user id, so the
         // revision need not move.
         replyDrafts: {},
@@ -200,7 +201,7 @@ export const useStore = create((set, get) => ({
         unreadCounts: { total: 0, byAccount: {} },
         notifications: [], threadMessages: {}, expandedThreadId: null,
         backfillProgress: {},
-        gtdSections: null, categoryCounts: {}, activeGtdTab: null,
+        gtdSections: null, categoryCounts: {}, categoryTotals: null, categoryCountScope: null, activeGtdTab: null,
       });
     } else {
       const restoredMessageId = localStorage.getItem('mailflow_locked_message') || null;
@@ -269,6 +270,7 @@ export const useStore = create((set, get) => ({
       return {
         selectedAccountId: accountId,
         selectedFolder: folder,
+        categoryCounts: {}, categoryTotals: null, categoryCountScope: null,
         selectedMessageId: null,
         messages: [],
         messagesOffset: 0,
@@ -847,13 +849,19 @@ export const useStore = create((set, get) => ({
     schedulePrefSave({ categorizationEnabled: val });
   },
 
-  // Unread counts per category for the tab bar badges { primary: N, newsletter: N, ... }
   categoryCounts: {},
-  setCategoryCounts: (counts) => set({ categoryCounts: counts }),
-  adjustCategoryCount: (category, delta) => set(state => {
+  categoryTotals: null,
+  categoryCountScope: null,
+  categoryCountRevision: 0,
+  setCategoryCounts: (counts, totals = null, scope = null) => set({ categoryCounts: counts, categoryTotals: totals, categoryCountScope: scope }),
+  adjustCategoryCount: (category, delta, message) => set(state => {
+    const scope = `${state.user?.id || ''}/${state.selectedAccountId || 'unified'}/${state.selectedFolder}`;
+    if (!message || message.folder !== 'INBOX' || message.message_count > 1 || state.categoryCountScope !== scope) return {};
+    const account = state.accounts.find(a => a.id === message.account_id);
+    if (!account || (state.selectedAccountId ? message.account_id !== state.selectedAccountId : !isAccountInUnifiedInbox(account))) return {};
     const key = category || 'primary';
     const current = state.categoryCounts[key] || 0;
-    return { categoryCounts: { ...state.categoryCounts, [key]: Math.max(0, current + delta) } };
+    return { categoryCounts: { ...state.categoryCounts, [key]: Math.max(0, current + delta) }, categoryCountRevision: state.categoryCountRevision + 1 };
   }),
 
   // ── Right-sidebar layout ────────────────────────────────────────────────────

@@ -317,6 +317,16 @@
     "backToList": "Назад к списку"
   },
   "messageList": {
+    "categoryTotal": "{{count}} всего",
+    "categoryUnread": "{{count}} непроч.",
+    "categoryCountUnknown": "Количество неизвестно",
+    "categoryEmpty": "В категории «{{category}}» нет писем",
+    "categoryEmptyUnread": "В категории «{{category}}» нет непрочитанных писем",
+    "categoryEmptyDesc": "Здесь показана только выбранная категория.",
+    "folderInboxEmpty": "Входящие пусты",
+    "folderEmpty": "Здесь пока пусто",
+    "folderInboxEmptyDesc": "Все письма разобраны",
+    "folderEmptyDesc": "В этой папке нет писем",
     "searching": "Ищем…",
     "replyDraftChanged": "Черновик ответа изменился. Попробуйте открыть его снова.",
     "replyDraftKeepCurrent": "Сохраните текущее сообщение и разберитесь с вложениями перед открытием этого черновика.",

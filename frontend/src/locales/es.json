@@ -317,6 +317,16 @@
     "backToList": "Volver a la lista"
   },
   "messageList": {
+    "categoryTotal": "{{count}} en total",
+    "categoryUnread": "{{count}} sin leer",
+    "categoryCountUnknown": "Recuento no disponible",
+    "categoryEmpty": "No hay mensajes en {{category}}",
+    "categoryEmptyUnread": "No hay mensajes sin leer en {{category}}",
+    "categoryEmptyDesc": "Esta vista solo muestra la categoría seleccionada.",
+    "folderInboxEmpty": "La bandeja de entrada está vacía",
+    "folderEmpty": "No hay nada aquí",
+    "folderInboxEmptyDesc": "Todo al día",
+    "folderEmptyDesc": "Esta carpeta no tiene mensajes",
     "searching": "Buscando…",
     "replyDraftChanged": "El borrador de respuesta ha cambiado. Intenta abrirlo de nuevo.",
     "replyDraftKeepCurrent": "Guarda el mensaje actual y resuelve sus adjuntos antes de abrir este borrador.",

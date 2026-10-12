@@ -317,6 +317,16 @@
     "backToList": "Voltar à lista"
   },
   "messageList": {
+    "categoryTotal": "{{count}} no total",
+    "categoryUnread": "{{count}} não lidas",
+    "categoryCountUnknown": "Contagem indisponível",
+    "categoryEmpty": "Nenhuma mensagem em {{category}}",
+    "categoryEmptyUnread": "Nenhuma mensagem não lida em {{category}}",
+    "categoryEmptyDesc": "Esta visualização mostra apenas a categoria selecionada.",
+    "folderInboxEmpty": "A caixa de entrada está vazia",
+    "folderEmpty": "Nada aqui",
+    "folderInboxEmptyDesc": "Tudo em dia",
+    "folderEmptyDesc": "Esta pasta não contém mensagens",
     "searching": "Pesquisando…",
     "replyDraftChanged": "O rascunho de resposta mudou. Tente abri-lo novamente.",
     "replyDraftKeepCurrent": "Salve a mensagem atual e resolva seus anexos antes de abrir este rascunho.",

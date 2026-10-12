@@ -90,6 +90,49 @@ describe('GET /api/mail/unread-counts unified total', () => {
     expect(query.mock.calls[1][1]).toEqual([['included']]);
   });
 
+  it('returns whole-INBOX totals alongside unread counts independently of page and filters', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 'included', include_in_unified_inbox: true }] })
+      .mockResolvedValueOnce({ rows: [
+        { category: 'primary', total_count: 120, unread_count: 0 },
+        { category: 'automated', total_count: 7, unread_count: 2 },
+      ] });
+    const response = await fetch(`${base}/api/mail/category-counts?limit=1&offset=50&unreadOnly=true&category=automated&q=synthetic`);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({ counts: { primary: 0, automated: 2 }, totals: { primary: 120, automated: 7 } });
+    expect(query.mock.calls[0][1]).toEqual(['user-1']);
+    const sql = query.mock.calls[1][0];
+    expect(sql).toContain('COUNT(*)::int AS total_count');
+    expect(sql).toContain('COUNT(*) FILTER (WHERE m.is_read = false)::int AS unread_count');
+    expect(sql).toContain("m.folder = 'INBOX'");
+    expect(sql).toContain('m.is_deleted = false');
+    expect(sql).not.toMatch(/LIMIT|OFFSET/);
+  });
+
+  it('allows an owned opted-out account explicitly without including other accounts', async () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    query.mockResolvedValueOnce({ rows: [{ id, include_in_unified_inbox: false }, { id: 'other', include_in_unified_inbox: true }] })
+      .mockResolvedValueOnce({ rows: [{ category: 'primary', total_count: 5, unread_count: 0 }] });
+    const response = await fetch(`${base}/api/mail/category-counts?accountId=${id}`);
+    expect(response.status).toBe(200);
+    expect(query.mock.calls[1][1]).toEqual([[id]]);
+    expect(await response.json()).toEqual({ counts: { primary: 0 }, totals: { primary: 5 } });
+  });
+
+  it('does not fall back to another account scope for an unowned or disabled account', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 'owned', include_in_unified_inbox: true }] });
+    const response = await fetch(`${base}/api/mail/category-counts?accountId=22222222-2222-4222-8222-222222222222`);
+    expect(response.status).toBe(404);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns empty aggregates when no enabled account belongs to the unified inbox', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 'excluded', include_in_unified_inbox: false }] });
+    const response = await fetch(`${base}/api/mail/category-counts`);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({ counts: {}, totals: {} });
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
   it('uses only opted-in accounts when expanding a unified thread', async () => {
     query
       .mockResolvedValueOnce({

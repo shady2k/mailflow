@@ -319,6 +319,16 @@
     "backToList": "Powrót do listy"
   },
   "messageList": {
+    "categoryTotal": "Łącznie {{count}}",
+    "categoryUnread": "Nieprzeczytane: {{count}}",
+    "categoryCountUnknown": "Liczba niedostępna",
+    "categoryEmpty": "Brak wiadomości w {{category}}",
+    "categoryEmptyUnread": "Brak nieprzeczytanych wiadomości w {{category}}",
+    "categoryEmptyDesc": "Ten widok pokazuje tylko wybraną kategorię.",
+    "folderInboxEmpty": "Skrzynka odbiorcza jest pusta",
+    "folderEmpty": "Nic tu nie ma",
+    "folderInboxEmptyDesc": "Wszystko załatwione",
+    "folderEmptyDesc": "Ten folder nie zawiera wiadomości",
     "searching": "Wyszukiwanie…",
     "replyDraftChanged": "Szkic odpowiedzi się zmienił. Spróbuj otworzyć go ponownie.",
     "replyDraftKeepCurrent": "Zapisz bieżącą wiadomość i rozwiąż problemy z jej załącznikami przed otwarciem tego szkicu.",

@@ -42,7 +42,7 @@ export function applyMarkRead(msg) {
   const st = useStore.getState();
   st.updateMessage(msg.id, { is_read: true });
   st.decrementUnread(msg.account_id);
-  st.adjustCategoryCount(msg.category, -1);
+  st.adjustCategoryCount(msg.category, -1, msg);
   // The guard stops a concurrent sync from reverting the optimistic flag before
   // the server has committed.
   setPending(msg.id, msg.account_id);
@@ -58,7 +58,7 @@ export function applyMarkRead(msg) {
       console.error('markRead failed:', e.message);
       st.updateMessage(msg.id, { is_read: false });
       st.incrementUnread(msg.account_id);
-      st.adjustCategoryCount(msg.category, 1);
+      st.adjustCategoryCount(msg.category, 1, msg);
       pendingMarkReadMap.delete(msg.id);
     });
 }

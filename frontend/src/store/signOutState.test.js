@@ -57,7 +57,7 @@ test('nor the mailbox that was on screen', () => {
     messageWindows: [{ id: 1, messageId: 'm1' }],
     notifications: [{ id: 1, title: 'Snoozed', body: 'Salary review' }],
     backfillProgress: { 'acct-a': { synced: 10, total: 20 } },
-    gtdSections: { now: [{ id: 'm1', subject: 'Salary review' }] }, categoryCounts: { updates: 3 },
+    gtdSections: { now: [{ id: 'm1', subject: 'Salary review' }] }, categoryCounts: { updates: 3 }, categoryTotals: { updates: 19 }, categoryCountScope: 'alice/acct-a/INBOX',
     activeGtdTab: 'now',
   };
   useStore.setState(mailbox);

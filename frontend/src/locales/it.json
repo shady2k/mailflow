@@ -317,6 +317,16 @@
     "backToList": "Torna all’elenco"
   },
   "messageList": {
+    "categoryTotal": "{{count}} totali",
+    "categoryUnread": "{{count}} non letti",
+    "categoryCountUnknown": "Conteggio non disponibile",
+    "categoryEmpty": "Nessun messaggio in {{category}}",
+    "categoryEmptyUnread": "Nessun messaggio non letto in {{category}}",
+    "categoryEmptyDesc": "Questa vista mostra solo la categoria selezionata.",
+    "folderInboxEmpty": "La posta in arrivo è vuota",
+    "folderEmpty": "Niente qui",
+    "folderInboxEmptyDesc": "Tutto aggiornato",
+    "folderEmptyDesc": "Questa cartella non contiene messaggi",
     "searching": "Ricerca…",
     "replyDraftChanged": "La bozza di risposta è cambiata. Prova ad aprirla di nuovo.",
     "replyDraftKeepCurrent": "Salva il messaggio attuale e gestisci i suoi allegati prima di aprire questa bozza.",

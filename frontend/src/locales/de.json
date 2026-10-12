@@ -317,6 +317,16 @@
     "backToList": "Zurück zur Liste"
   },
   "messageList": {
+    "categoryTotal": "{{count}} insgesamt",
+    "categoryUnread": "{{count}} ungelesen",
+    "categoryCountUnknown": "Anzahl nicht verfügbar",
+    "categoryEmpty": "Keine Nachrichten in {{category}}",
+    "categoryEmptyUnread": "Keine ungelesenen Nachrichten in {{category}}",
+    "categoryEmptyDesc": "Diese Ansicht zeigt nur die ausgewählte Kategorie.",
+    "folderInboxEmpty": "Posteingang ist leer",
+    "folderEmpty": "Hier ist nichts",
+    "folderInboxEmptyDesc": "Alles erledigt",
+    "folderEmptyDesc": "Dieser Ordner enthält keine Nachrichten",
     "searching": "Suche…",
     "replyDraftChanged": "Der Antwortentwurf wurde geändert. Öffne ihn erneut.",
     "replyDraftKeepCurrent": "Speichere die aktuelle Nachricht und kläre ihre Anhänge, bevor du diesen Entwurf öffnest.",

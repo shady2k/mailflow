@@ -317,6 +317,16 @@
     "backToList": "返回列表"
   },
   "messageList": {
+    "categoryTotal": "共 {{count}} 封",
+    "categoryUnread": "未读 {{count}} 封",
+    "categoryCountUnknown": "数量不可用",
+    "categoryEmpty": "{{category}}中没有邮件",
+    "categoryEmptyUnread": "{{category}}中没有未读邮件",
+    "categoryEmptyDesc": "此视图仅显示所选分类。",
+    "folderInboxEmpty": "收件箱为空",
+    "folderEmpty": "这里没有内容",
+    "folderInboxEmptyDesc": "所有邮件已处理",
+    "folderEmptyDesc": "此文件夹中没有邮件",
     "searching": "正在搜索…",
     "replyDraftChanged": "回复草稿已更改。请尝试重新打开。",
     "replyDraftKeepCurrent": "打开此草稿前，请保存当前邮件并处理其附件。",

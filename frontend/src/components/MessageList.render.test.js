@@ -551,3 +551,78 @@ test('history restore starts a new search generation and ignores the interrupted
   assert.equal(useStore.getState().isSearching, false);
   await React.act(async () => root.unmount()); root = null;
 });
+
+function categoryButton(category) { return [...container.querySelectorAll('button')].find(button => button.textContent.startsWith(`messageList.categories.${category}`)); }
+async function mountCategories({rows = [], counts = {}, totals = {}, enabled = true, global = false} = {}) {
+  api.getCategoryCounts = async () => ({counts, totals});
+  await mount({rows, threadedView: false});
+  await React.act(async () => useStore.setState({accounts:[{...ACCOUNT,enabled:true,categorization_enabled:enabled}],categorizationEnabled:global,activeCategory:'primary',activeGtdTab:null,unreadOnly:false,searchQuery:'',categoryTotals:null}));
+}
+test('category total remains visible when all messages are read and does not depend on loaded page', async () => {
+  await mountCategories({rows:[{...MESSAGE,is_read:true}],counts:{primary:0,automated:2},totals:{primary:120,automated:7}});
+  assert.equal(categoryButton('primary').querySelector('[aria-label="messageList.categoryTotal"]').textContent,'120');
+  assert.doesNotMatch(categoryButton('primary').textContent,/categoryUnread/);
+  assert.match(categoryButton('automated').textContent,/7messageList.categoryUnread/);
+  const counter=[...container.querySelectorAll('span')].find(span=>span.title==='Cached results matching this filter');
+  assert.ok(counter, 'account-specific categorization uses the filtered total even when global categorization is off');
+  assert.equal(counter.textContent,'1');
+  await React.act(async () => root.unmount());root=null;
+});
+test('empty category and unread filter do not claim the entire inbox is empty', async () => {
+  await mountCategories({totals:{automated:2}});
+  assert.match(container.textContent,/messageList.categoryEmpty/);
+  assert.doesNotMatch(container.textContent,/Inbox is empty|messageList.folderInboxEmpty/);
+  const unreadButton = [...container.querySelectorAll('button')].find(button => button.textContent === 'messageList.unread');
+  await React.act(async () => unreadButton.click());
+  assert.match(container.textContent,/messageList.categoryEmptyUnread/);
+  await querySearch('synthetic');
+  assert.match(container.textContent,/messageList.searching/);
+  assert.doesNotMatch(container.textContent,/messageList.categoryEmpty/);
+  await querySearch('');
+  await React.act(async () => root.unmount());root=null;
+});
+test('category refresh rejects old account and older same-scope responses and handles failure as unknown', async () => {
+  await mountCategories();
+  const requests=[];
+  api.getCategoryCounts=params=>new Promise((resolve,reject)=>requests.push({params,resolve,reject}));
+  await React.act(async () => useStore.setState({messagesRefreshToken:useStore.getState().messagesRefreshToken+1}));
+  await React.act(async () => useStore.setState({selectedAccountId:'acct-2',accounts:[{...ACCOUNT,enabled:true,categorization_enabled:true},{...ACCOUNT,id:'acct-2',enabled:true,categorization_enabled:true}]}));
+  assert.equal(categoryButton('primary').querySelector('[aria-label="messageList.categoryCountUnknown"]').textContent,'—');
+  await React.act(async () => requests[0].resolve({counts:{primary:9},totals:{primary:999}}));
+  assert.equal(useStore.getState().categoryTotals,null);
+  await React.act(async () => requests[1].resolve({counts:{primary:0},totals:{primary:2}}));
+  assert.equal(useStore.getState().categoryTotals.primary,2);
+  await React.act(async () => {window.dispatchEvent(new CustomEvent('mailflow:refresh'));await new Promise(r=>setTimeout(r,90));});
+  await React.act(async () => {window.dispatchEvent(new CustomEvent('mailflow:category-counts-refresh'));await new Promise(r=>setTimeout(r,90));});
+  await React.act(async () => requests[3].resolve({counts:{primary:1},totals:{primary:1}}));
+  await React.act(async () => requests[2].resolve({counts:{primary:8},totals:{primary:80}}));
+  assert.deepEqual(useStore.getState().categoryTotals,{primary:1});
+  await React.act(async () => {window.dispatchEvent(new CustomEvent('mailflow:refresh'));await new Promise(r=>setTimeout(r,90));});
+  await React.act(async () => requests[4].reject(new Error('Synthetic count failure')));
+  assert.equal(useStore.getState().categoryTotals,null);
+  await React.act(async () => root.unmount());root=null;
+});
+test('optimistic read counts preserve totals and reject other account/folder scopes', async () => {
+  await mountCategories({counts:{primary:2},totals:{primary:8}});
+  await React.act(async () => useStore.getState().adjustCategoryCount('primary',-1,{...MESSAGE,category:'primary'}));
+  assert.equal(useStore.getState().categoryCounts.primary,1);
+  assert.equal(useStore.getState().categoryTotals.primary,8);
+  await React.act(async () => useStore.getState().adjustCategoryCount('primary',1,{...MESSAGE,folder:'Sent'}));
+  await React.act(async () => useStore.getState().adjustCategoryCount('primary',1,{...MESSAGE,account_id:'other'}));
+  assert.equal(useStore.getState().categoryCounts.primary,1);
+  await React.act(async () => useStore.getState().adjustCategoryCount('primary',1,{...MESSAGE}));
+  assert.equal(useStore.getState().categoryCounts.primary,2);
+  await React.act(async () => root.unmount());root=null;
+});
+
+test('older category snapshots cannot undo optimistic unread changes', async () => {
+  await mountCategories({counts:{primary:2},totals:{primary:8}});
+  let resolve;
+  api.getCategoryCounts=()=>new Promise(r=>{resolve=r;});
+  await React.act(async () => {window.dispatchEvent(new CustomEvent('mailflow:refresh'));await new Promise(r=>setTimeout(r,90));});
+  await React.act(async () => useStore.getState().adjustCategoryCount('primary',-1,MESSAGE));
+  await React.act(async () => resolve({counts:{primary:2},totals:{primary:8}}));
+  assert.equal(useStore.getState().categoryCounts.primary,1);
+  assert.equal(useStore.getState().categoryTotals.primary,8);
+  await React.act(async () => root.unmount());root=null;
+});

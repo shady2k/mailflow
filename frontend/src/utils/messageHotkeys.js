@@ -23,12 +23,12 @@ export function markMessageUnread(message, { cancel, update, incrementUnread, de
   if (!message.is_read) return true;
   update?.(message.id, { is_read: false });
   incrementUnread?.(message.account_id);
-  adjustCategoryCount?.(message.category, 1);
+  adjustCategoryCount?.(message.category, 1, message);
   void Promise.resolve(patch?.([message.id], false)).catch(error => {
     console.error('markUnread failed:', error?.message);
     update?.(message.id, { is_read: true });
     decrementUnread?.(message.account_id);
-    adjustCategoryCount?.(message.category, -1);
+    adjustCategoryCount?.(message.category, -1, message);
   });
   return true;
 }

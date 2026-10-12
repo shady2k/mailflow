@@ -164,6 +164,16 @@
     "updateAvailable": "Je dostupná aktualizace: v{{version}}"
   },
   "messageList": {
+    "categoryTotal": "Celkem {{count}}",
+    "categoryUnread": "Nepřečtené: {{count}}",
+    "categoryCountUnknown": "Počet není k dispozici",
+    "categoryEmpty": "Žádné zprávy v {{category}}",
+    "categoryEmptyUnread": "Žádné nepřečtené zprávy v {{category}}",
+    "categoryEmptyDesc": "Toto zobrazení obsahuje pouze vybranou kategorii.",
+    "folderInboxEmpty": "Doručená pošta je prázdná",
+    "folderEmpty": "Nic tu není",
+    "folderInboxEmptyDesc": "Vše je vyřízeno",
+    "folderEmptyDesc": "Tato složka neobsahuje zprávy",
     "searching": "Hledání…",
     "replyDraftChanged": "Koncept odpovědi se změnil. Zkuste jej znovu otevřít.",
     "replyDraftKeepCurrent": "Před otevřením tohoto konceptu uložte aktuální zprávu a vyřešte její přílohy.",

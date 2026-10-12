@@ -133,8 +133,8 @@ export default function MessageList() {
     hoverQuickActions, hoverActionSet, showMobileAvatars, showMessagePreviews,
     swipeActions,
     folders, favoriteFolders, recentFolders, addFavoriteFolder, removeFavoriteFolder, setSelectedAccount,
-    categorizationEnabled, categoryCounts, setCategoryCounts, adjustCategoryCount,
-    markReadBehavior, markReadDelay,
+    categorizationEnabled, categoryCounts, categoryTotals, setCategoryCounts, adjustCategoryCount,
+    markReadBehavior, markReadDelay, user,
     searchAllFolders,
     activeGtdTab, setActiveGtdTab, gtdSections, enabledPlugins,
     openMessageWindow,
@@ -308,18 +308,39 @@ export default function MessageList() {
     unifiedInboxAccountKey,
     showGtdTab,
   });
-  useEffect(() => {
-    if (!categorizationActive || selectedFolder !== 'INBOX') {
-      setCategoryCounts({});
-      return;
-    }
+  useLayoutEffect(() => {
+    setCategoryCounts({});
+    if (!categorizationActive || selectedFolder !== 'INBOX') return;
     let cancelled = false;
+    let sequence = 0;
+    let timer;
+    const scope = `${user?.id || ''}/${selectedAccountId || 'unified'}/${selectedFolder}`;
     const params = selectedAccountId ? { accountId: selectedAccountId } : {};
-    api.getCategoryCounts(params)
-      .then(data => { if (!cancelled) setCategoryCounts(data.counts || {}); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [categorizationActive, selectedAccountId, selectedFolder, messagesRefreshToken, unifiedInboxAccountKey, setCategoryCounts]);
+    const load = async () => {
+      const current = ++sequence;
+      const revision = useStore.getState().categoryCountRevision;
+      try {
+        const data = await api.getCategoryCounts(params);
+        if (!cancelled && current === sequence && revision === useStore.getState().categoryCountRevision) setCategoryCounts(data.counts || {}, data.totals ?? null, scope);
+      } catch {
+        if (!cancelled && current === sequence && revision === useStore.getState().categoryCountRevision) setCategoryCounts({});
+      }
+    };
+    const refresh = () => {
+      ++sequence;
+      clearTimeout(timer);
+      timer = setTimeout(load, 75);
+    };
+    load();
+    window.addEventListener('mailflow:refresh', refresh);
+    window.addEventListener('mailflow:category-counts-refresh', refresh);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      window.removeEventListener('mailflow:refresh', refresh);
+      window.removeEventListener('mailflow:category-counts-refresh', refresh);
+    };
+  }, [categorizationActive, selectedAccountId, selectedFolder, messagesRefreshToken, unifiedInboxAccountKey, selectedAccount?.enabled, user?.id, setCategoryCounts]);
 
   const searchSeq = useRef(0);
   const refreshRequestRef = useRef(null);
@@ -884,12 +905,12 @@ export default function MessageList() {
     if (read) {
       if (estimatedDelta > 0) {
         decrementUnread(message.account_id, estimatedDelta);
-        adjustCategoryCount(message.category, -estimatedDelta);
+        adjustCategoryCount(message.category, -estimatedDelta, message);
       }
     } else {
       if (estimatedDelta > 0) {
         incrementUnread(message.account_id, estimatedDelta);
-        adjustCategoryCount(message.category, estimatedDelta);
+        adjustCategoryCount(message.category, estimatedDelta, message);
       }
     }
 
@@ -907,8 +928,8 @@ export default function MessageList() {
       } else {
         updateMessage(message.id, { is_read: !read, unread_count: !read ? 0 : 1 });
       }
-      if (read && estimatedDelta > 0) { incrementUnread(message.account_id, estimatedDelta); adjustCategoryCount(message.category, estimatedDelta); }
-      else if (!read && estimatedDelta > 0) { decrementUnread(message.account_id, estimatedDelta); adjustCategoryCount(message.category, -estimatedDelta); }
+      if (read && estimatedDelta > 0) { incrementUnread(message.account_id, estimatedDelta); adjustCategoryCount(message.category, estimatedDelta, message); }
+      else if (!read && estimatedDelta > 0) { decrementUnread(message.account_id, estimatedDelta); adjustCategoryCount(message.category, -estimatedDelta, message); }
       return;
     }
 
@@ -945,7 +966,7 @@ export default function MessageList() {
     // Category counts are not per account, so the total delta still applies.
     if (actualDelta !== estimatedDelta) {
       const diff = actualDelta - estimatedDelta;
-      adjustCategoryCount(message.category, read ? -diff : diff);
+      adjustCategoryCount(message.category, read ? -diff : diff, message);
     }
 
     if (read) {
@@ -978,7 +999,7 @@ export default function MessageList() {
       for (const [accountId, n] of actualByAccount) {
         if (read) incrementUnread(accountId, n); else decrementUnread(accountId, n);
       }
-      if (actualDelta > 0) adjustCategoryCount(message.category, read ? actualDelta : -actualDelta);
+      if (actualDelta > 0) adjustCategoryCount(message.category, read ? actualDelta : -actualDelta, message);
       if (read) actionMessages.forEach(msg => pendingMarkReadMap.delete(msg.id));
     }
   }, [
@@ -1895,22 +1916,17 @@ export default function MessageList() {
     const markAsRead = msgs.some(m => !m.is_read);
     // Compute per-account and per-category unread deltas before mutating state
     const deltaByAccount = {};
-    const deltaByCategory = {};
     msgs.forEach(msg => {
       if (!deltaByAccount[msg.account_id]) deltaByAccount[msg.account_id] = 0;
-      const catKey = msg.category || 'primary';
-      if (!deltaByCategory[catKey]) deltaByCategory[catKey] = 0;
-      if (markAsRead && !msg.is_read) { deltaByAccount[msg.account_id]++; deltaByCategory[catKey]++; }
-      if (!markAsRead && msg.is_read) { deltaByAccount[msg.account_id]++; deltaByCategory[catKey]++; }
+      if (markAsRead && !msg.is_read) { deltaByAccount[msg.account_id]++; }
+      if (!markAsRead && msg.is_read) { deltaByAccount[msg.account_id]++; }
     });
     // Optimistic update
     msgs.forEach(msg => updateMessage(msg.id, { is_read: markAsRead, unread_count: markAsRead ? 0 : 1 }));
     Object.entries(deltaByAccount).forEach(([accountId, delta]) => {
       if (delta > 0) markAsRead ? decrementUnread(accountId, delta) : incrementUnread(accountId, delta);
     });
-    Object.entries(deltaByCategory).forEach(([cat, delta]) => {
-      if (delta > 0) adjustCategoryCount(cat, markAsRead ? -delta : delta);
-    });
+    msgs.filter(msg => markAsRead ? !msg.is_read : msg.is_read).forEach(msg => adjustCategoryCount(msg.category, markAsRead ? -1 : 1, msg));
     setSelectedIds(new Set());
     setSelectionModeActive(false);
     try {
@@ -1921,9 +1937,7 @@ export default function MessageList() {
       Object.entries(deltaByAccount).forEach(([accountId, delta]) => {
         if (delta > 0) markAsRead ? incrementUnread(accountId, delta) : decrementUnread(accountId, delta);
       });
-      Object.entries(deltaByCategory).forEach(([cat, delta]) => {
-        if (delta > 0) adjustCategoryCount(cat, markAsRead ? delta : -delta);
-      });
+      msgs.filter(msg => markAsRead ? !msg.is_read : msg.is_read).forEach(msg => adjustCategoryCount(msg.category, markAsRead ? 1 : -1, msg));
     }
   }, [updateMessage, decrementUnread, incrementUnread, adjustCategoryCount]);
 
@@ -1972,7 +1986,7 @@ export default function MessageList() {
       const doMarkRead = () => {
         updateMessage(msg.id, { is_read: true });
         decrementUnread(msg.account_id);
-        adjustCategoryCount(msg.category, -1);
+        adjustCategoryCount(msg.category, -1, msg);
         setPending(msg.id, msg.account_id);
         api.bulkRead([msg.id], true)
           .then(() => {
@@ -1984,7 +1998,7 @@ export default function MessageList() {
             console.error('markRead failed:', e.message);
             updateMessage(msg.id, { is_read: false });
             incrementUnread(msg.account_id);
-            adjustCategoryCount(msg.category, 1);
+            adjustCategoryCount(msg.category, 1, msg);
             pendingMarkReadMap.delete(msg.id);
           });
       };
@@ -2074,7 +2088,7 @@ export default function MessageList() {
       updateMessage(selectedMessageId, { is_read: newRead });
       if (newRead) {
         decrementUnread(msg.account_id);
-        adjustCategoryCount(msg.category, -1);
+        adjustCategoryCount(msg.category, -1, msg);
         setPending(selectedMessageId, msg.account_id);
         api.bulkRead([selectedMessageId], true)
           .then(() => {
@@ -2088,7 +2102,7 @@ export default function MessageList() {
           });
       } else {
         incrementUnread(msg.account_id);
-        adjustCategoryCount(msg.category, 1);
+        adjustCategoryCount(msg.category, 1, msg);
         pendingMarkReadMap.delete(selectedMessageId);
         completedMarkReadMap.delete(selectedMessageId);
         api.bulkRead([selectedMessageId], false).catch(console.error);
@@ -2469,8 +2483,7 @@ export default function MessageList() {
             updateMessage(message.id, { category: newCategory });
           }
           // Refresh category counts badge
-          const countParams = selectedAccountId ? { accountId: selectedAccountId } : {};
-          api.getCategoryCounts(countParams).then(d => setCategoryCounts(d.counts || {})).catch(() => {});
+          window.dispatchEvent(new CustomEvent('mailflow:category-counts-refresh'));
         } catch (err) {
           console.error('setCategory failed:', err?.message);
         }
@@ -2488,8 +2501,7 @@ export default function MessageList() {
           },
         });
         if (saved) {
-          const countParams = selectedAccountId ? { accountId: selectedAccountId } : {};
-          api.getCategoryCounts(countParams).then(d => setCategoryCounts(d.counts || {})).catch(() => {});
+          window.dispatchEvent(new CustomEvent('mailflow:category-counts-refresh'));
         }
         break;
       }
@@ -2599,7 +2611,7 @@ export default function MessageList() {
     const doMarkRead = () => {
       updateMessage(message.id, { is_read: true, unread_count: 0 });
       decrementUnread(message.account_id);
-      adjustCategoryCount(message.category, -1);
+      adjustCategoryCount(message.category, -1, message);
       setPending(message.id, message.account_id);
       api.bulkRead([message.id], true)
         .catch(() => api.bulkRead([message.id], true))
@@ -2612,7 +2624,7 @@ export default function MessageList() {
           console.error('markRead failed:', e.message);
           updateMessage(message.id, { is_read: false, unread_count: prevUnread });
           incrementUnread(message.account_id);
-          adjustCategoryCount(message.category, 1);
+          adjustCategoryCount(message.category, 1, message);
           pendingMarkReadMap.delete(message.id);
         });
     };
@@ -2688,7 +2700,7 @@ export default function MessageList() {
   const headerCountKnown = headerSamples.length > 0 && headerSamples.every(s => s?.known && s.totalCount != null);
   const headerCountStale = headerSamples.some(s => !s?.known || s?.stale);
   const headerServerTotal = headerSamples.reduce((sum, s) => sum + (s?.totalCount || 0), 0);
-  const filteredCount = unreadOnly || (activeCategory && categorizationEnabled);
+  const filteredCount = unreadOnly || (selectedFolder === 'INBOX' && activeCategory && categorizationActive && !activeGtdTab);
 
   // Derived bulk-selection values (computed fresh each render, no stale closure risk)
   const selectionMode = selectedIds.size > 0 || selectionModeActive;
@@ -3325,6 +3337,7 @@ export default function MessageList() {
           >
             {categorizationActive && ['primary', 'newsletter', 'promotion', 'automated', 'social'].map(cat => {
               const unread = categoryCounts[cat] || 0;
+              const total = categoryTotals === null ? null : categoryTotals[cat] || 0;
               const isActive = activeCategory === cat && !activeGtdTab;
               return (
                 <button
@@ -3343,6 +3356,7 @@ export default function MessageList() {
                   }}
                 >
                   {t(`messageList.categories.${cat}`)}
+                  <span aria-label={total === null ? t('messageList.categoryCountUnknown') : t('messageList.categoryTotal', { count: total })} title={total === null ? t('messageList.categoryCountUnknown') : t('messageList.categoryTotal', { count: total })} style={{ fontSize: 10, color: 'var(--text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>{total === null ? '—' : total}</span>
                   {unread > 0 && (
                     <span style={{
                       fontSize: 10, fontWeight: 600, lineHeight: 1,
@@ -3351,7 +3365,7 @@ export default function MessageList() {
                       color: 'var(--bg-primary)',
                       minWidth: 16, textAlign: 'center',
                     }}>
-                      {unread > 99 ? '99+' : unread}
+                      {t('messageList.categoryUnread', { count: unread })}
                     </span>
                   )}
                 </button>
@@ -3603,6 +3617,7 @@ export default function MessageList() {
             searchQuery={searchQuery.trim()}
             searchError={searchError}
             unreadOnly={unreadOnly}
+            category={categorizationActive && selectedFolder === 'INBOX' && !activeGtdTab ? activeCategory : null}
             selectedFolder={selectedFolder}
             accounts={accounts}
             onClearSearch={() => { setSearchQuery(''); }}
@@ -4335,7 +4350,7 @@ function UndoBar({ notification, onDismiss, showTopBorder }) {
   );
 }
 
-function EmptyState({ folderSyncing, searchQuery, searchError, unreadOnly, selectedFolder, accounts, onClearSearch, onRetrySearch, onShowAll, onCompose }) {
+function EmptyState({ folderSyncing, searchQuery, searchError, unreadOnly, category, selectedFolder, accounts, onClearSearch, onRetrySearch, onShowAll, onCompose }) {
   const { t } = useTranslation();
 
   if (folderSyncing) {
@@ -4381,6 +4396,14 @@ function EmptyState({ folderSyncing, searchQuery, searchError, unreadOnly, selec
         }}>{t('messageList.clearSearch')}</button>
       </div>
     );
+  }
+
+  if (category) {
+    return <div style={{ padding: '60px 24px', textAlign: 'center' }}>
+      <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>{t(unreadOnly ? 'messageList.categoryEmptyUnread' : 'messageList.categoryEmpty', { category: t(`messageList.categories.${category}`) })}</div>
+      <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: 20 }}>{t('messageList.categoryEmptyDesc')}</div>
+      {unreadOnly && <button onClick={onShowAll} style={{ padding: '7px 18px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 13 }}>{t('messageList.showAll')}</button>}
+    </div>;
   }
 
   if (unreadOnly) {
@@ -4444,10 +4467,10 @@ function EmptyState({ folderSyncing, searchQuery, searchError, unreadOnly, selec
         )}
       </div>
       <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text-primary)', marginBottom: 6 }}>
-        {isInbox ? 'Inbox is empty' : 'Nothing here'}
+        {t(isInbox ? 'messageList.folderInboxEmpty' : 'messageList.folderEmpty')}
       </div>
       <div style={{ fontSize: 13, color: 'var(--text-tertiary)', marginBottom: isInbox ? 20 : 0 }}>
-        {isInbox ? "You're all caught up" : 'This folder has no messages'}
+        {t(isInbox ? 'messageList.folderInboxEmptyDesc' : 'messageList.folderEmptyDesc')}
       </div>
       {isInbox && (
         <button onClick={onCompose} style={{

@@ -23,7 +23,7 @@ test('copy uses the shared request client and emits the lock event on 423', asyn
 
     globalThis.fetch = async () => ({ ok: false, status: 423, json: async () => ({ error: 'Locked' }) });
     await assert.rejects(api.copyMessage('m/1', 'Projects'), /Locked/);
-    assert.deepEqual(events, ['mailflow:locked']);
+    assert.deepEqual(events, ['mailflow:category-counts-refresh', 'mailflow:locked']);
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.window = originalWindow;

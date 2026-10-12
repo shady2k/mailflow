@@ -2503,8 +2503,8 @@ router.post('/messages/:id/spam', async (req, res) => {
 });
 
 // GET /api/mail/category-counts
-// Returns unread message counts per category for the INBOX. Used by the
-// category tab bar to show unread badges. Scoped to the user; optionally
+// Returns total and unread cached message counts per category for the INBOX.
+// Scoped to the user; optionally
 // filtered to a single account via ?accountId=.
 router.get('/category-counts', async (req, res) => {
   const { accountId } = req.query;
@@ -2516,11 +2516,16 @@ router.get('/category-counts', async (req, res) => {
     'SELECT id, include_in_unified_inbox FROM email_accounts WHERE user_id = $1 AND enabled = true',
     [req.session.userId]
   );
+  res.set('Cache-Control', 'no-store');
+  if (accountId && !accountsResult.rows.some(account => account.id === accountId)) {
+    return res.status(404).json({ error: 'Account not found' });
+  }
   const { accountIds: scopedIds } = resolveAccountScope(accountsResult.rows, accountId);
-  if (!scopedIds.length) return res.json({ counts: {} });
+  if (!scopedIds.length) return res.json({ counts: {}, totals: {} });
 
   const result = await query(`
     SELECT COALESCE(m.category, 'primary') AS category,
+           COUNT(*)::int AS total_count,
            COUNT(*) FILTER (WHERE m.is_read = false)::int AS unread_count
     FROM messages m
     WHERE m.account_id = ANY($1)
@@ -2530,11 +2535,12 @@ router.get('/category-counts', async (req, res) => {
   `, [scopedIds]);
 
   const counts = {};
+  const totals = {};
   for (const row of result.rows) {
     counts[row.category] = row.unread_count;
+    totals[row.category] = row.total_count;
   }
-  res.set('Cache-Control', 'no-store');
-  res.json({ counts });
+  res.json({ counts, totals });
 });
 
 // PATCH /api/mail/messages/:id/category

@@ -31,7 +31,11 @@ async function request(method, path, body, extraHeaders) {
     // The status rides along so a caller can tell a refusal (409) from a failure.
     throw Object.assign(new Error(err.error || 'Request failed'), { status: res.status });
   }
-  return res.json();
+  const data = await res.json();
+  if (typeof window !== 'undefined' && method !== 'GET' && (path.startsWith('/mail/') || path.startsWith('/rules/') || path.startsWith('/categories/'))) {
+    window.dispatchEvent(new CustomEvent('mailflow:category-counts-refresh'));
+  }
+  return data;
 }
 
 export async function streamAiChat(messages, { signal, onDelta } = {}) {

@@ -317,6 +317,16 @@
     "backToList": "Retour à la liste"
   },
   "messageList": {
+    "categoryTotal": "{{count}} au total",
+    "categoryUnread": "{{count}} non lus",
+    "categoryCountUnknown": "Nombre indisponible",
+    "categoryEmpty": "Aucun message dans {{category}}",
+    "categoryEmptyUnread": "Aucun message non lu dans {{category}}",
+    "categoryEmptyDesc": "Cette vue affiche uniquement la catégorie sélectionnée.",
+    "folderInboxEmpty": "La boîte de réception est vide",
+    "folderEmpty": "Rien ici",
+    "folderInboxEmptyDesc": "Tout est à jour",
+    "folderEmptyDesc": "Ce dossier ne contient aucun message",
     "searching": "Recherche…",
     "replyDraftChanged": "Le brouillon de réponse a changé. Essayez de le rouvrir.",
     "replyDraftKeepCurrent": "Enregistrez le message actuel et gérez ses pièces jointes avant d’ouvrir ce brouillon.",

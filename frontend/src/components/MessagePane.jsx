@@ -107,7 +107,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
     updateMessage, removeMessage, decrementUnread, incrementUnread, openCompose, accounts, addNotification,
     imageWhitelist, addToImageWhitelist, blockRemoteImages, threadMessages,
     replyDefault, shortcuts, recentFolders, favoriteFolders, todoistConnected,
-    categorizationEnabled, setCategoryCounts, adjustCategoryCount,
+    categorizationEnabled, adjustCategoryCount,
     aiActions, setShowAdmin, setAdminTab,
   } = useStore();
 
@@ -722,7 +722,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
               const doMarkRead = () => {
                 updMsg(target.id, { is_read: true });
                 decUnread(target.account_id);
-                adjCat(target.category, -1);
+                adjCat(target.category, -1, target);
                 setPending(target.id, target.account_id);
                 api.bulkRead([target.id], true)
                   .then(() => {
@@ -734,7 +734,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
                     console.error('markRead failed:', e.message);
                     updMsg(target.id, { is_read: false });
                     incUnread(target.account_id);
-                    adjCat(target.category, 1);
+                    adjCat(target.category, 1, target);
                     pendingMarkReadMap.delete(target.id);
                   });
               };
@@ -1328,8 +1328,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
         try {
           await api.setMessageCategory(message.id, newCategory);
           updateMessage(message.id, { category: newCategory });
-          const params = message.account_id ? { accountId: message.account_id } : {};
-          api.getCategoryCounts(params).then(d => setCategoryCounts(d.counts || {})).catch(() => {});
+          window.dispatchEvent(new CustomEvent('mailflow:refresh'));
         } catch (err) {
           console.error('setCategory failed:', err?.message);
         }
@@ -1343,8 +1342,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
         });
         if (saved) {
           updateMessage(message.id, { category });
-          const params = message.account_id ? { accountId: message.account_id } : {};
-          api.getCategoryCounts(params).then(d => setCategoryCounts(d.counts || {})).catch(() => {});
+          window.dispatchEvent(new CustomEvent('mailflow:refresh'));
         }
         break;
       }
@@ -1419,8 +1417,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
         // Refresh category counts since this message may have moved tabs.
         const acct = accounts.find(a => a.id === message.account_id);
         if (acct) {
-          const params = message.account_id ? { accountId: message.account_id } : {};
-          api.getCategoryCounts(params).then(d => setCategoryCounts(d.counts || {})).catch(() => {});
+          window.dispatchEvent(new CustomEvent('mailflow:refresh'));
         }
         addNotification({ title: t('message.aiClassify.done', { category: t(`messageList.categories.${result.category}`) }) });
       }

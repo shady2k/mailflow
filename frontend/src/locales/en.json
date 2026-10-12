@@ -317,6 +317,16 @@
     "backToList": "Back to list"
   },
   "messageList": {
+    "categoryTotal": "{{count}} total",
+    "categoryUnread": "{{count}} unread",
+    "categoryCountUnknown": "Count unavailable",
+    "categoryEmpty": "No messages in {{category}}",
+    "categoryEmptyUnread": "No unread messages in {{category}}",
+    "categoryEmptyDesc": "This view is limited to the selected category.",
+    "folderInboxEmpty": "Inbox is empty",
+    "folderEmpty": "Nothing here",
+    "folderInboxEmptyDesc": "You're all caught up",
+    "folderEmptyDesc": "This folder has no messages",
     "searching": "Searching…",
     "replyDraftChanged": "The reply draft changed. Try opening it again.",
     "replyDraftKeepCurrent": "Save the current message and resolve its attachments before opening this draft.",
