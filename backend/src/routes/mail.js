@@ -1,3 +1,4 @@
+import { bodyDiagnostics } from '../services/bodyDiagnostics.js';
 import { STATUS_STALE_MS } from '../services/folderStatus.js';
 import { Router } from 'express';
 import { createRequire } from 'module';
@@ -399,6 +400,7 @@ const bccOf = (message) => (Array.isArray(message.bcc_addresses) ? message.bcc_a
 
 // Get full message body + attachments list
 router.get('/messages/:id/body', async (req, res) => {
+  const trace = bodyDiagnostics(res);
   const { id } = req.params;
   if (!UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid message id' });
 
@@ -426,6 +428,7 @@ router.get('/messages/:id/body', async (req, res) => {
     /url\(\s*['"]?http:\/\//i.test(message.body_html)
   );
   if (message.body_render_cached_at || ((message.body_html || message.body_text) && !hasCidRefs && !hasHttpImgs)) {
+    trace('cache_hit', { cached: true });
     const attachments = message.attachments
       ? (typeof message.attachments === 'string' ? JSON.parse(message.attachments) : message.attachments)
       : [];
@@ -478,17 +481,21 @@ router.get('/messages/:id/body', async (req, res) => {
     return res.json({ html: responseHtml, text: message.body_text, attachments, complete: true, hasBlockedRemoteImages, senderEmail: message.sender_email, senderName: message.sender_name, forwardedFromEmail: message.forwarded_from_email, forwardedFromName: message.forwarded_from_name, forwardedVia: message.forwarded_via, bccAddresses: bccOf(message) });
   }
 
+  trace('cache_miss', { cached: false });
   // Fetch from IMAP — signal user activity so background jobs back off during this request.
   try {
     const accountResult = await query('SELECT * FROM email_accounts WHERE id = $1', [message.account_id]);
     const account = accountResult.rows[0];
     imapManager.noteUserActivity(account.id);
 
+    trace('imap_fetch_start');
+    const fetchStarted = Date.now();
     const { html, text, attachments, renderComplete } = await fetchWithTimeout(
-      imapManager.fetchMessageBody(account, message.uid, message.folder),
+      imapManager.fetchMessageBody(account, message.uid, message.folder, { diagnostics: trace }),
       BODY_FETCH_TIMEOUT_MS
     );
 
+    trace('imap_fetch_end', { durationMs: Date.now() - fetchStarted, complete: renderComplete === true });
     const safeHtml = html ? sanitizeDbText(sanitizeEmail(html)) : null;
     const safeText = sanitizeDbText(text);
     const snip = sanitizeDbText(snippetFromBody(safeText, safeHtml || html));
@@ -506,6 +513,7 @@ router.get('/messages/:id/body', async (req, res) => {
         [safeHtml, safeText, JSON.stringify(attachments || []), id, snip,
           message.uid, message.folder, message.message_id, message.body_text, message.body_html, renderComplete === true]
       );
+      trace('cache_persist', { cached: cached.rows.length > 0 });
       if (!cached.rows.length) return res.status(409).json({ error: 'Message changed while loading. Please reopen it.' });
     }
 

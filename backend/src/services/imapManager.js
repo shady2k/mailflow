@@ -5938,7 +5938,7 @@ export class ImapManager {
   // Uses a fresh connection to avoid lock contention with sync connection.
   // Auto-retries once on transient connection errors (stale pool connection, NAT
   // timeout, half-open TCP, etc.) so a single click is enough in all common cases.
-  async fetchMessageBody(account, uid, folder, { searchOnly = false } = {}) {
+  async fetchMessageBody(account, uid, folder, { searchOnly = false, diagnostics = () => {} } = {}) {
     // While the provider is refusing secondary logins, a body click can only succeed over a
     // session that already exists. If the pool holds an idle client, use it (no new LOGIN);
     // otherwise fail fast with a typed error the route turns into a clear 503, instead of
@@ -5956,7 +5956,8 @@ export class ImapManager {
     // the first attempt uses the pool (withFreshClient); the retry uses a genuinely fresh
     // login (withFreshLogin) so a frozen/half-open pooled connection can't hang or return
     // a blank body for recently-arrived mail.
-    const doFetch = (acquire) => acquire(account, async (client) => {
+    const doFetch = (acquire, acquireStarted = Date.now()) => acquire(account, async (client) => {
+      diagnostics('connection_ready', { waitMs: Date.now() - acquireStarted });
       let html = null;
       let text = null;
       let attachments;
@@ -5968,7 +5969,9 @@ export class ImapManager {
       // quota is hit.
       const uidStr = String(uid);
 
+      const lockStarted = Date.now();
       const lock = await client.getMailboxLock(folder);
+      diagnostics('mailbox_lock_ready', { waitMs: Date.now() - lockStarted });
       try {
         let structure = null;
         const prefetched = new Map(); // part number -> Buffer
