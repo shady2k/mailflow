@@ -3,7 +3,9 @@ import { query } from '../services/db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { foldedMatch, freeTextTermCondition, searchRowsSQL } from '../services/searchText.js';
 export { freeTextTermCondition } from '../services/searchText.js';
-import { bodyIndexStatus } from '../services/bodyIndexer.js';
+import { bodyIndexStatus, bodyIndexWaitReason, controlBodyIndex } from '../services/bodyIndexer.js';
+import { imapManager } from '../index.js';
+import { uuidParam } from '../utils/uuid.js';
 import { resolveAccountScope } from '../services/unifiedInbox.js';
 
 const router = Router();
@@ -107,8 +109,19 @@ export function trashFolderExclusionCondition() {
       )`;
 }
 
+router.param('accountId', uuidParam('accountId'));
+router.post('/index-status/:accountId', async (req, res) => {
+  const { action } = req.body || {};
+  if (!['pause', 'resume', 'retry'].includes(action)) return res.status(400).json({ error: 'Invalid indexing action' });
+  if (!await controlBodyIndex(query, req.session.userId, req.params.accountId, action)) {
+    return res.status(404).json({ error: 'Account not found' });
+  }
+  res.json({ ok: true });
+});
+
 router.get('/index-status', async (req, res) => {
-  res.json({ scope: 'loaded_headers', accounts: await bodyIndexStatus(query, req.session.userId) });
+  res.set('Cache-Control', 'no-store');
+  res.json({ scope: 'loaded_headers', accounts: await bodyIndexStatus(query, req.session.userId, account => bodyIndexWaitReason(imapManager, account)) });
 });
 
 router.get('/', searchLimiter, async (req, res) => {

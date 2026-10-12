@@ -1914,5 +1914,30 @@
     "indexScope": "La copertura comprende le intestazioni già sincronizzate. I corpi in attesa vengono indicizzati automaticamente con nuovi tentativi.",
     "indexPending": "In attesa: {{count}}",
     "indexRefresh": "Aggiorna stato"
+  },
+  "searchIndex": {
+    "title": "Ricerca e indicizzazione",
+    "description": "La ricerca nel testo completo comprende i messaggi con intestazioni già caricate. La copertura cresce scaricando il testo mancante in background.",
+    "pauseHelp": "La pausa viene salvata per questo account. Un download in corso può terminare; sincronizzazione e apertura dei messaggi restano disponibili.",
+    "retryHelp": "Vengono rimessi in coda solo i download non riusciti. Testo di ricerca e cache restano intatti. Gli indici del database si aggiornano automaticamente; non occorre ricostruirli o svuotare la cache.",
+    "refresh": "Aggiorna stato",
+    "refreshing": "Aggiornamento…",
+    "updated": "Aggiornato alle {{time}}",
+    "actionFailed": "Impossibile salvare l’impostazione di indicizzazione. Riprova.",
+    "unavailable": "Stato dell’indicizzazione non disponibile. Prova ad aggiornare.",
+    "noAccounts": "Nessun account IMAP attivo.",
+    "paused": "Indicizzazione in background sospesa",
+    "complete": "Tutti i messaggi caricati sono ricercabili",
+    "indexing": "Indicizzazione del testo dei messaggi",
+    "queued": "In attesa dell’indicizzazione in background",
+    "retrying": "I download non riusciti saranno ritentati automaticamente",
+    "connectionWait": "In attesa della fine della pausa di connessione",
+    "syncRunning": "In attesa della sincronizzazione della casella",
+    "userActive": "Priorità all’attività recente nella posta",
+    "coverage": "Ricercabili: {{bodies}} / {{headers}} · In attesa: {{pending}} · Non riusciti: {{failed}}",
+    "pause": "Sospendi indicizzazione",
+    "resume": "Riprendi indicizzazione",
+    "retry": "Riprova i download non riusciti",
+    "saving": "Salvataggio…"
   }
 }

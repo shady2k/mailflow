@@ -48,7 +48,7 @@ export class BodyIndexer {
               AND (m.body_index_retry_at IS NULL OR m.body_index_retry_at <= now())
               AND (m.body_index_lease_until IS NULL OR m.body_index_lease_until <= now())
             ORDER BY m.date DESC NULLS LAST, m.id LIMIT 1 FOR UPDATE SKIP LOCKED
-          ) pending WHERE a.enabled AND a.protocol = 'imap'
+          ) pending WHERE a.enabled AND a.protocol = 'imap' AND NOT a.body_index_paused
           ORDER BY a.body_index_last_run ASC NULLS FIRST, a.id LIMIT $1
         ), claimed AS (
           UPDATE messages m SET body_index_lease_until = now() + interval '10 minutes'
@@ -65,9 +65,15 @@ export class BodyIndexer {
   async index(row) {
     try {
       // Rendering caches may omit later MIME parts; verify full coverage once.
-      if (!this.canFetch(row.account)) throw new Error('Provider temporarily limiting background connections');
+      if (row.account.body_index_paused || this.canFetch(row.account) !== true) {
+        await this.query(`UPDATE messages SET body_index_lease_until = NULL,
+          body_index_retry_at = now() + interval '5 seconds'
+          WHERE id = $1 AND uid = $2 AND folder = $3 AND message_id IS NOT DISTINCT FROM $4`,
+        [row.id, row.uid, row.folder, row.message_id]);
+        return;
+      }
       const body = await this.fetchBody(row.account, row.uid, row.folder);
-      if (!body.found && body.text == null && body.html == null) throw new Error('Message body unavailable; retry pending');
+      if (!body.found && body.text == null && body.html == null) throw Object.assign(new Error('Message body unavailable'), { code: 'body_unavailable' });
       const text = searchableBody(body);
       await this.query(`UPDATE messages SET search_body_text = $1, body_indexed_at = now(),
         body_index_error = NULL, body_index_retry_at = NULL, body_index_lease_until = NULL
@@ -76,24 +82,62 @@ export class BodyIndexer {
           AND body_text IS NOT DISTINCT FROM $6 AND body_html IS NOT DISTINCT FROM $7`,
       [text, row.id, row.uid, row.folder, row.message_id, row.body_text, row.body_html]);
     } catch (err) {
+      if (err.backgroundDeferred) {
+        await this.query(`UPDATE messages SET body_index_lease_until = NULL,
+          body_index_retry_at = now() + interval '5 seconds'
+          WHERE id = $1 AND uid = $2 AND folder = $3 AND message_id IS NOT DISTINCT FROM $4`,
+        [row.id, row.uid, row.folder, row.message_id]);
+        return;
+      }
       const attempts = row.body_index_attempts + 1;
       await this.query(`UPDATE messages SET body_index_attempts = $1, body_index_error = $2,
         body_index_retry_at = now() + $3 * interval '1 millisecond', body_index_lease_until = NULL
         WHERE id = $4 AND uid = $5 AND folder = $6 AND message_id IS NOT DISTINCT FROM $7`,
-      [attempts, String(err.message).slice(0, 300), retryDelay(attempts), row.id, row.uid, row.folder, row.message_id]);
+      [attempts, err.code === 'body_unavailable' ? 'body_unavailable' : 'fetch_failed', retryDelay(attempts), row.id, row.uid, row.folder, row.message_id]);
     }
   }
 }
 
-export async function bodyIndexStatus(query, userId) {
-  const { rows } = await query(`SELECT a.id AS account_id, a.name AS account_name,
+export function bodyIndexWaitReason(manager, account, now = Date.now()) {
+  if (manager._secondaryConnectBlocked(account.id)) return 'connection_wait';
+  if (manager.backfillAllRunning.has(account.id)) return 'sync_running';
+  if (now - (manager.lastUserActivity.get(account.id) || 0) < 5000) return 'user_active';
+  return null;
+}
+
+export async function controlBodyIndex(query, userId, accountId, action) {
+  if (action === 'pause' || action === 'resume') {
+    const { rows } = await query(`UPDATE email_accounts SET body_index_paused = $3
+      WHERE id = $1 AND user_id = $2 AND enabled AND protocol = 'imap' RETURNING id`,
+    [accountId, userId, action === 'pause']);
+    return rows.length > 0;
+  }
+  if (action !== 'retry') throw new TypeError('Invalid indexing action');
+  const { rows } = await query(`WITH owned AS (
+    SELECT id FROM email_accounts WHERE id = $1 AND user_id = $2 AND enabled AND protocol = 'imap'
+    FOR UPDATE
+  ), retried AS (
+    UPDATE messages SET body_index_error = NULL, body_index_attempts = 0, body_index_retry_at = NULL
+    WHERE account_id IN (SELECT id FROM owned) AND NOT is_deleted AND body_indexed_at IS NULL
+      AND body_index_error IS NOT NULL
+      AND (body_index_lease_until IS NULL OR body_index_lease_until <= now()) RETURNING id
+  ) SELECT id FROM owned`, [accountId, userId]);
+  return rows.length > 0;
+}
+
+export async function bodyIndexStatus(query, userId, waitReason = () => null) {
+  const { rows } = await query(`SELECT a.id AS account_id, a.name AS account_name, a.body_index_paused AS paused,
     count(m.id)::int AS headers_loaded,
     count(m.id) FILTER (WHERE m.body_indexed_at IS NOT NULL)::int AS bodies_searchable,
     count(m.id) FILTER (WHERE m.body_indexed_at IS NULL)::int AS pending,
     count(m.id) FILTER (WHERE m.body_indexed_at IS NULL AND m.body_index_error IS NOT NULL)::int AS failed,
-    max(m.body_index_error) FILTER (WHERE m.body_indexed_at IS NULL) AS last_error
+    count(m.id) FILTER (WHERE m.body_indexed_at IS NULL AND m.body_index_lease_until > now())::int AS active,
+    min(m.body_index_retry_at) FILTER (WHERE m.body_indexed_at IS NULL AND m.body_index_error IS NOT NULL) AS retry_at
     FROM email_accounts a LEFT JOIN messages m ON m.account_id = a.id AND NOT m.is_deleted
     WHERE a.user_id = $1 AND a.enabled AND a.protocol = 'imap'
     GROUP BY a.id ORDER BY a.name`, [userId]);
-  return rows.map(row => ({ ...row, complete: row.pending === 0 }));
+  return rows.map(row => ({ ...row, complete: row.pending === 0,
+    state: row.paused ? 'paused' : row.pending === 0 ? 'complete'
+      : waitReason({ id: row.account_id }) || (row.active > 0 ? 'indexing' : row.failed > 0 ? 'retrying' : 'queued'),
+  }));
 }

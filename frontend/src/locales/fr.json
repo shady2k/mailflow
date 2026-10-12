@@ -1914,5 +1914,30 @@
     "indexScope": "La couverture concerne les en-têtes déjà synchronisés. Les corps en attente sont indexés automatiquement avec de nouvelles tentatives.",
     "indexPending": "En attente : {{count}}",
     "indexRefresh": "Actualiser le statut"
+  },
+  "searchIndex": {
+    "title": "Recherche et indexation",
+    "description": "La recherche intégrale couvre les messages dont les en-têtes sont chargés. La couverture augmente lorsque l’indexation en arrière-plan télécharge le texte manquant.",
+    "pauseHelp": "La pause est enregistrée pour ce compte. Un téléchargement en cours peut se terminer ; la synchronisation et l’ouverture des messages restent disponibles.",
+    "retryHelp": "Seuls les téléchargements échoués sont remis en attente. Le texte de recherche et le cache sont conservés. Les index de la base se mettent à jour automatiquement ; aucune reconstruction locale ni suppression du cache n’est nécessaire.",
+    "refresh": "Actualiser l’état",
+    "refreshing": "Actualisation…",
+    "updated": "Actualisé à {{time}}",
+    "actionFailed": "Impossible d’enregistrer le réglage d’indexation. Réessayez.",
+    "unavailable": "L’état de l’indexation est indisponible. Essayez de l’actualiser.",
+    "noAccounts": "Aucun compte IMAP activé.",
+    "paused": "Indexation en arrière-plan suspendue",
+    "complete": "Tous les messages chargés sont recherchables",
+    "indexing": "Indexation du texte des messages",
+    "queued": "En attente de l’indexation en arrière-plan",
+    "retrying": "Les téléchargements échoués seront relancés automatiquement",
+    "connectionWait": "En attente de la fin du délai de connexion",
+    "syncRunning": "En attente de la synchronisation de la boîte",
+    "userActive": "Priorité à l’activité récente dans la messagerie",
+    "coverage": "Recherchables : {{bodies}} / {{headers}} · En attente : {{pending}} · Échecs : {{failed}}",
+    "pause": "Suspendre l’indexation",
+    "resume": "Reprendre l’indexation",
+    "retry": "Relancer les téléchargements échoués",
+    "saving": "Enregistrement…"
   }
 }

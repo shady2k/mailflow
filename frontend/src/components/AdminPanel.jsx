@@ -40,6 +40,7 @@ import { formatRelativeTime, daysSince } from '../utils/relativeTime.js';
 import { htmlLang } from '../utils/browserLanguage.js';
 import SpamSettings from './SpamSettings.jsx';
 import BackupSettings from './BackupSettings.jsx';
+import SearchIndexSettings from './SearchIndexSettings.jsx';
 
 // ─── Shared field component ───────────────────────────────────────────────────
 function Field({ label, required, children }) {
@@ -7235,7 +7236,7 @@ function MailboxCleanupTab() {
 }
 
 const TAB_GROUPS = [
-  { id: 'account-mail', labelKey: 'admin.tabs.groupAccountMail', tabIds: ['accounts', 'notifications', 'rules', 'categories', 'cleanup', 'antispam'] },
+  { id: 'account-mail', labelKey: 'admin.tabs.groupAccountMail', tabIds: ['accounts', 'search-index', 'notifications', 'rules', 'categories', 'cleanup', 'antispam'] },
   { id: 'display', labelKey: 'admin.tabs.groupDisplay', tabIds: ['appearance', 'shortcuts'] },
   { id: 'security-integrations', labelKey: 'admin.tabs.groupSecurityIntegrations', tabIds: ['security', 'integrations', 'ai', 'ai-actions', 'plugins'] },
   { id: 'admin', labelKey: 'admin.tabs.groupAdmin', tabIds: ['users', 'sso', 'backup'] },
@@ -7243,6 +7244,7 @@ const TAB_GROUPS = [
 
 const TABS = [
   // Account & Mail
+  { id: 'search-index', labelKey: 'searchIndex.title', icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6"/></svg> },
   {
     id: 'accounts', labelKey: 'admin.tabs.accounts',
     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
@@ -8917,6 +8919,7 @@ export default function AdminPanel() {
   const tabContent = (
     <>
       {adminTab === 'accounts' && <AccountsTab />}
+      {adminTab === 'search-index' && <SearchIndexSettings />}
       {adminTab === 'antispam' && <SpamSettings />}
       {adminTab === 'rules' && <RulesAndBlockListTab initialSubTab={pendingSubTab} />}
       {adminTab === 'categories' && <CategoriesSection initialSubTab={pendingSubTab} />}

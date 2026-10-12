@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
-import { BodyIndexer, bodyIndexStatus } from './bodyIndexer.js';
+import { BodyIndexer, bodyIndexStatus, controlBodyIndex } from './bodyIndexer.js';
 import { freeTextTermCondition, foldedMatch, searchRowsSQL } from './searchText.js';
 
 function expect(value) {
@@ -37,7 +37,7 @@ suite('PostgreSQL C-locale full-body search and durable queue', () => {
       to_addresses jsonb, cc_addresses jsonb, in_reply_to text, thread_references text[], snippet text,
       is_read boolean DEFAULT false, is_starred boolean DEFAULT false, has_attachments boolean DEFAULT false)`);
     if (process.env.SEARCH_TEST_NO_ICU) await query('CREATE COLLATION mailflow_search FROM "C"');
-    const migrations = ['0066_unicode_body_index.sql', '0067_unicode_search_indexes.sql'];
+    const migrations = ['0066_unicode_body_index.sql', '0067_unicode_search_indexes.sql', '0068_body_index_controls.sql'];
     for (const file of migrations) {
       const sql = await readFile(new URL('../../migrations/' + file, import.meta.url), 'utf8');
       if (file.startsWith('0067')) {
@@ -58,6 +58,41 @@ suite('PostgreSQL C-locale full-body search and durable queue', () => {
     VALUES ($1,$2,$3,$4,$5,$6,'sender@lab.test',$7,$8) RETURNING *`,
   [account.id, uid, fields.folder || 'INBOX', fields.mid || `<${uid}@lab.test>`, fields.subject || 'Спасибо HELLO', fields.sender || 'АЛЕКСЕЙ Smith', fields.text ?? null, fields.html ?? null])).rows[0];
   const search = async term => (await query(`SELECT m.* FROM messages m WHERE ${freeTextTermCondition(1)}`, [`%${term}%`])).rows;
+
+  it('persists pause across workers, resumes, and retries without removing cached data', async () => {
+    const m = await insert(a, 51, { text: 'Cached text', html: '<p>Cached HTML</p>' });
+    assert.equal(await controlBodyIndex(query, randomUUID(), a.id, 'pause'), false);
+    assert.equal(await controlBodyIndex(query, a.user_id, a.id, 'pause'), true);
+    const fetchBody = async () => { throw new Error('Should not fetch while paused'); };
+    await new BodyIndexer({ query, fetchBody }).tick();
+    assert.equal((await bodyIndexStatus(query, a.user_id))[0].state, 'paused');
+    assert.equal((await query('SELECT body_index_attempts FROM messages WHERE id=$1', [m.id])).rows[0].body_index_attempts, 0);
+    await controlBodyIndex(query, a.user_id, a.id, 'resume');
+    await new BodyIndexer({ query, fetchBody: async () => ({ text: 'Verified complete body', found: true }) }).tick();
+    const indexed = (await query('SELECT * FROM messages WHERE id=$1', [m.id])).rows[0];
+    await controlBodyIndex(query, a.user_id, a.id, 'retry');
+    const after = (await query('SELECT * FROM messages WHERE id=$1', [m.id])).rows[0];
+    assert.equal(after.search_body_text, indexed.search_body_text);
+    assert.equal(after.body_html, '<p>Cached HTML</p>');
+    assert.equal(after.body_text, 'Cached text');
+    assert.ok(after.body_indexed_at);
+  });
+
+  it('retry skips live leases and ready messages, resetting only failed work', async () => {
+    const ready = await insert(a, 61);
+    const failed = await insert(a, 62);
+    const active = await insert(a, 63);
+    await query("UPDATE messages SET search_body_text='kept', body_indexed_at=now() WHERE id=$1", [ready.id]);
+    await query("UPDATE messages SET body_index_error='fetch_failed',body_index_attempts=3,body_index_retry_at=now()+interval '1 hour' WHERE id=ANY($1)", [[failed.id,active.id]]);
+    await query("UPDATE messages SET body_index_lease_until=now()+interval '10 minutes' WHERE id=$1", [active.id]);
+    await controlBodyIndex(query, a.user_id, a.id, 'retry');
+    const rows = (await query('SELECT * FROM messages WHERE account_id=$1 ORDER BY uid', [a.id])).rows;
+    assert.equal(rows[0].search_body_text, 'kept');
+    assert.equal(rows[1].body_index_error, null);
+    assert.equal(rows[1].body_index_attempts, 0);
+    assert.equal(rows[2].body_index_error, 'fetch_failed');
+    assert.ok(rows[2].body_index_lease_until);
+  });
 
   it('folds Cyrillic and English under C and matches the same expression index', async () => {
     await insert(a, 1, { text: 'Полное СОДЕРЖИМОЕ English' });

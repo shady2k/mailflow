@@ -1914,5 +1914,30 @@
     "indexScope": "覆盖范围包含已同步的邮件头。待处理的正文会自动建立索引，并在出错时重试。",
     "indexPending": "待处理：{{count}}",
     "indexRefresh": "刷新状态"
+  },
+  "searchIndex": {
+    "title": "搜索与索引",
+    "description": "全文搜索涵盖已加载邮件头的邮件。后台索引下载缺失的正文后，搜索范围会扩大。",
+    "pauseHelp": "暂停设置会为此账户保存。正在进行的下载可能完成；邮件同步和打开邮件仍可正常使用。",
+    "retryHelp": "仅将下载失败的邮件重新加入队列，保留搜索文本和邮件缓存。数据库索引自动更新，无需本地重建或清除缓存。",
+    "refresh": "刷新状态",
+    "refreshing": "正在刷新…",
+    "updated": "更新于 {{time}}",
+    "actionFailed": "无法保存索引设置，请重试。",
+    "unavailable": "无法获取索引状态，请尝试刷新。",
+    "noAccounts": "没有已启用的 IMAP 账户。",
+    "paused": "后台索引已暂停",
+    "complete": "所有已加载邮件均可搜索",
+    "indexing": "正在索引邮件正文",
+    "queued": "等待后台索引",
+    "retrying": "失败的下载将自动重试",
+    "connectionWait": "等待连接冷却时间结束",
+    "syncRunning": "等待邮箱同步完成",
+    "userActive": "优先处理最近的邮件操作",
+    "coverage": "可搜索：{{bodies}} / {{headers}} · 待处理：{{pending}} · 失败：{{failed}}",
+    "pause": "暂停索引",
+    "resume": "恢复索引",
+    "retry": "重试失败的下载",
+    "saving": "正在保存…"
   }
 }

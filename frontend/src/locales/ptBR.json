@@ -1914,5 +1914,30 @@
     "indexScope": "A cobertura inclui os cabeçalhos já sincronizados. Os corpos pendentes são indexados automaticamente com novas tentativas.",
     "indexPending": "Pendentes: {{count}}",
     "indexRefresh": "Atualizar status"
+  },
+  "searchIndex": {
+    "title": "Pesquisa e indexação",
+    "description": "A pesquisa de texto completo abrange mensagens com cabeçalhos já carregados. A cobertura aumenta ao baixar o texto ausente em segundo plano.",
+    "pauseHelp": "A pausa é salva para esta conta. Um download em andamento pode terminar; a sincronização e a abertura de mensagens continuam funcionando.",
+    "retryHelp": "Somente downloads com falha voltam à fila. O texto de pesquisa e o cache são preservados. Os índices do banco se atualizam automaticamente; não é necessário reconstruí-los nem limpar o cache.",
+    "refresh": "Atualizar estado",
+    "refreshing": "Atualizando o estado…",
+    "updated": "Atualizado às {{time}}",
+    "actionFailed": "Não foi possível salvar a configuração de indexação. Tente novamente.",
+    "unavailable": "O estado da indexação está indisponível. Tente atualizar.",
+    "noAccounts": "Nenhuma conta IMAP ativada.",
+    "paused": "Indexação em segundo plano pausada",
+    "complete": "Todas as mensagens carregadas podem ser pesquisadas",
+    "indexing": "Indexando o texto das mensagens",
+    "queued": "Aguardando indexação em segundo plano",
+    "retrying": "Downloads com falha serão repetidos automaticamente",
+    "connectionWait": "Aguardando o fim da pausa de conexão",
+    "syncRunning": "Aguardando a sincronização da caixa",
+    "userActive": "Priorizando a atividade recente no correio",
+    "coverage": "Pesquisáveis: {{bodies}} / {{headers}} · Pendentes: {{pending}} · Falhas: {{failed}}",
+    "pause": "Pausar a indexação",
+    "resume": "Retomar a indexação",
+    "retry": "Repetir downloads com falha",
+    "saving": "Salvando…"
   }
 }

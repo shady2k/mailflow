@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 // search.js opens a DB handle and registers auth middleware at import time;
 // neither is exercised by the pure parser under test, so stub them out.
+vi.mock('../index.js', () => ({ imapManager: {} }));
 vi.mock('../services/db.js', () => ({ query: vi.fn() }));
 vi.mock('../middleware/auth.js', () => ({ requireAuth: vi.fn() }));
 

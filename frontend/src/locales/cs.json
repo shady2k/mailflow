@@ -1933,5 +1933,30 @@
     "indexScope": "Pokrytí zahrnuje již synchronizované hlavičky. Zbývající těla se indexují automaticky s opakováním při chybách.",
     "indexPending": "Čeká: {{count}}",
     "indexRefresh": "Obnovit stav"
+  },
+  "searchIndex": {
+    "title": "Hledání a indexování",
+    "description": "Fulltextové hledání zahrnuje zprávy s načtenými hlavičkami. Pokrytí roste, když indexování na pozadí stahuje chybějící text.",
+    "pauseHelp": "Pozastavení se ukládá pro tento účet. Probíhající stahování může skončit; synchronizace a otevírání zpráv fungují dál.",
+    "retryHelp": "Do fronty se vrátí pouze neúspěšná stahování. Prohledávaný text a mezipaměť se zachovají. Indexy databáze se aktualizují automaticky; místní obnova ani vymazání mezipaměti nejsou potřeba.",
+    "refresh": "Obnovit stav",
+    "refreshing": "Obnovování…",
+    "updated": "Aktualizováno v {{time}}",
+    "actionFailed": "Nastavení indexování se nepodařilo uložit. Zkuste to znovu.",
+    "unavailable": "Stav indexování není dostupný. Zkuste jej obnovit.",
+    "noAccounts": "Žádné zapnuté účty IMAP.",
+    "paused": "Indexování na pozadí je pozastaveno",
+    "complete": "Všechny načtené zprávy lze prohledávat",
+    "indexing": "Indexování textu zpráv",
+    "queued": "Čekání na indexování na pozadí",
+    "retrying": "Neúspěšná stahování se automaticky zopakují",
+    "connectionWait": "Čekání na konec prodlevy připojení",
+    "syncRunning": "Čekání na synchronizaci schránky",
+    "userActive": "Přednost má nedávná práce s poštou",
+    "coverage": "Prohledávatelné: {{bodies}} / {{headers}} · Čekající: {{pending}} · Neúspěšné: {{failed}}",
+    "pause": "Pozastavit indexování",
+    "resume": "Pokračovat v indexování",
+    "retry": "Opakovat neúspěšná stahování",
+    "saving": "Ukládání…"
   }
 }

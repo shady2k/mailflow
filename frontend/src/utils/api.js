@@ -394,6 +394,7 @@ export const api = {
     if (offset) params.set('offset', offset);
     return request('GET', `/search?${params}`);
   },
+  controlBodyIndex: (accountId, action) => request('POST', `/search/index-status/${encodeURIComponent(accountId)}`, { action }),
   bodyIndexStatus: () => request('GET', '/search/index-status'),
   suggestContacts: (q) => request('GET', `/search/contacts?q=${encodeURIComponent(q)}`),
 

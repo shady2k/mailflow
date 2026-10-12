@@ -1914,5 +1914,30 @@
     "indexScope": "Coverage includes headers already synchronized; pending bodies are indexed automatically with retries.",
     "indexPending": "Pending: {{count}}",
     "indexRefresh": "Refresh status"
+  },
+  "searchIndex": {
+    "title": "Search and indexing",
+    "description": "Full-body search covers messages whose headers have been loaded. Coverage grows as background indexing downloads the missing text.",
+    "pauseHelp": "Pausing is saved for this account. An active download may finish; mail sync and opening messages still work.",
+    "retryHelp": "Retry queues only failed downloads and preserves searchable text and cached messages. Database search indexes update automatically; no local rebuild or cache clearing is needed.",
+    "refresh": "Refresh status",
+    "refreshing": "Refreshing…",
+    "updated": "Updated at {{time}}",
+    "actionFailed": "Could not save the indexing setting. Try again.",
+    "unavailable": "Indexing status is unavailable. Try refreshing.",
+    "noAccounts": "No enabled IMAP accounts.",
+    "paused": "Background indexing paused",
+    "complete": "All loaded messages are searchable",
+    "indexing": "Indexing message bodies",
+    "queued": "Waiting for background indexing",
+    "retrying": "Failed downloads will retry automatically",
+    "connectionWait": "Waiting for the connection cooldown to end",
+    "syncRunning": "Waiting for mailbox sync to finish",
+    "userActive": "Yielding to recent mail activity",
+    "coverage": "Searchable: {{bodies}} / {{headers}} · Pending: {{pending}} · Failed: {{failed}}",
+    "pause": "Pause indexing",
+    "resume": "Resume indexing",
+    "retry": "Retry failed downloads",
+    "saving": "Saving…"
   }
 }

@@ -70,6 +70,21 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+describe('background full-body indexing yields to foreground connections', () => {
+  beforeEach(() => { evictPool(ACCOUNT.id); });
+  afterEach(() => { evictPool(ACCOUNT.id); });
+  it('does not join the waiter queue or grow while a foreground client is held', async () => {
+    const client = await acquirePooledClient(ACCOUNT);
+    const count = ImapFlow.mock.calls.length;
+    await expect(acquirePooledClient(ACCOUNT, { background: true })).rejects.toMatchObject({ backgroundDeferred: true });
+    expect(ImapFlow.mock.calls.length).toBe(count);
+    releasePooledClient(ACCOUNT, client);
+    const background = await acquirePooledClient(ACCOUNT, { background: true });
+    expect(background).toBe(client);
+    releasePooledClient(ACCOUNT, background);
+  });
+});
+
 describe('connection fan-out when the pool is stalled (#474)', () => {
   it('serves queued work from the pool instead of opening a connection each', async () => {
     // Fill the pool: POOL_SIZE slow body fetches that hold their connections.

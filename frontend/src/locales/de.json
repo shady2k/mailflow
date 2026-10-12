@@ -1914,5 +1914,30 @@
     "indexScope": "Die Abdeckung umfasst bereits synchronisierte Kopfzeilen. Ausstehende Nachrichtentexte werden automatisch mit Wiederholungen indexiert.",
     "indexPending": "Ausstehend: {{count}}",
     "indexRefresh": "Status aktualisieren"
+  },
+  "searchIndex": {
+    "title": "Suche und Indizierung",
+    "description": "Die Volltextsuche umfasst Nachrichten mit geladenen Kopfzeilen. Die Abdeckung wächst, während die Hintergrundindizierung fehlenden Text herunterlädt.",
+    "pauseHelp": "Die Pause wird für dieses Konto gespeichert. Ein laufender Download kann enden; E-Mail-Synchronisierung und das Öffnen von Nachrichten funktionieren weiterhin.",
+    "retryHelp": "Nur fehlgeschlagene Downloads werden erneut eingereiht. Suchtext und Nachrichtencache bleiben erhalten. Datenbankindizes aktualisieren sich automatisch; ein lokaler Neuaufbau oder das Leeren des Caches ist nicht nötig.",
+    "refresh": "Status aktualisieren",
+    "refreshing": "Status wird aktualisiert…",
+    "updated": "Aktualisiert um {{time}}",
+    "actionFailed": "Die Indizierungseinstellung konnte nicht gespeichert werden. Bitte erneut versuchen.",
+    "unavailable": "Der Indizierungsstatus ist nicht verfügbar. Bitte aktualisieren.",
+    "noAccounts": "Keine aktivierten IMAP-Konten.",
+    "paused": "Hintergrundindizierung pausiert",
+    "complete": "Alle geladenen Nachrichten sind durchsuchbar",
+    "indexing": "Nachrichtentexte werden indiziert",
+    "queued": "Warten auf Hintergrundindizierung",
+    "retrying": "Fehlgeschlagene Downloads werden automatisch wiederholt",
+    "connectionWait": "Warten auf das Ende der Verbindungspause",
+    "syncRunning": "Warten auf die Postfachsynchronisierung",
+    "userActive": "Vorrang für kürzliche E-Mail-Aktivität",
+    "coverage": "Durchsuchbar: {{bodies}} / {{headers}} · Ausstehend: {{pending}} · Fehlgeschlagen: {{failed}}",
+    "pause": "Indizierung pausieren",
+    "resume": "Indizierung fortsetzen",
+    "retry": "Fehlgeschlagene Downloads wiederholen",
+    "saving": "Wird gespeichert…"
   }
 }

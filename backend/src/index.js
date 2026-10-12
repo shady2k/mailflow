@@ -45,7 +45,7 @@ import { runMigrations } from './services/migrations.js';
 import { parseVCard } from './utils/vcard.js';
 import { reloadAuthSettings } from './services/authLimiter.js';
 import { createWebSocketServer, setupWebSocket } from './services/websocket.js';
-import { BodyIndexer } from './services/bodyIndexer.js';
+import { BodyIndexer, bodyIndexWaitReason } from './services/bodyIndexer.js';
 import { ImapManager } from './services/imapManager.js';
 import { getUpdateStatus } from './services/updateCheck.js';
 import { recordHttp } from './services/performanceMetrics.js';
@@ -300,9 +300,7 @@ try {
 const bodyIndexer = new BodyIndexer({
   query,
   fetchBody: (account, uid, folder) => imapManager.fetchMessageBody(account, uid, folder, { searchOnly: true }),
-  canFetch: account => !imapManager._secondaryConnectBlocked(account.id)
-    && !imapManager.backfillAllRunning.has(account.id)
-    && Date.now() - (imapManager.lastUserActivity.get(account.id) || 0) >= 5000,
+  canFetch: account => bodyIndexWaitReason(imapManager, account) || true,
 });
 bodyIndexer.start();
 

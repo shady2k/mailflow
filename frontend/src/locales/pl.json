@@ -1933,5 +1933,30 @@
     "indexScope": "Zakres obejmuje już zsynchronizowane nagłówki. Oczekujące treści są indeksowane automatycznie z ponawianiem prób.",
     "indexPending": "Oczekujące: {{count}}",
     "indexRefresh": "Odśwież stan"
+  },
+  "searchIndex": {
+    "title": "Wyszukiwanie i indeksowanie",
+    "description": "Wyszukiwanie pełnego tekstu obejmuje wiadomości z pobranymi nagłówkami. Zasięg rośnie wraz z pobieraniem brakującego tekstu w tle.",
+    "pauseHelp": "Pauza jest zapisywana dla tego konta. Rozpoczęte pobieranie może się zakończyć; synchronizacja i otwieranie wiadomości nadal działają.",
+    "retryHelp": "Do kolejki wracają tylko nieudane pobrania. Tekst wyszukiwania i pamięć podręczna pozostają zachowane. Indeksy bazy aktualizują się automatycznie; lokalna przebudowa ani czyszczenie pamięci nie są potrzebne.",
+    "refresh": "Odśwież stan",
+    "refreshing": "Odświeżanie…",
+    "updated": "Zaktualizowano o {{time}}",
+    "actionFailed": "Nie udało się zapisać ustawienia indeksowania. Spróbuj ponownie.",
+    "unavailable": "Stan indeksowania jest niedostępny. Spróbuj odświeżyć.",
+    "noAccounts": "Brak włączonych kont IMAP.",
+    "paused": "Indeksowanie w tle wstrzymane",
+    "complete": "Można przeszukać wszystkie pobrane wiadomości",
+    "indexing": "Indeksowanie tekstu wiadomości",
+    "queued": "Oczekiwanie na indeksowanie w tle",
+    "retrying": "Nieudane pobrania zostaną automatycznie ponowione",
+    "connectionWait": "Oczekiwanie na koniec przerwy połączeń",
+    "syncRunning": "Oczekiwanie na synchronizację skrzynki",
+    "userActive": "Pierwszeństwo dla niedawnej aktywności w poczcie",
+    "coverage": "Przeszukiwalne: {{bodies}} / {{headers}} · Oczekujące: {{pending}} · Błędy: {{failed}}",
+    "pause": "Wstrzymaj indeksowanie",
+    "resume": "Wznów indeksowanie",
+    "retry": "Ponów nieudane pobrania",
+    "saving": "Zapisywanie…"
   }
 }

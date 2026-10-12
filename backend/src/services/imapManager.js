@@ -1615,12 +1615,16 @@ const poolSecondaryGate = {
 export function registerPoolSecondaryGate(gate) { Object.assign(poolSecondaryGate, gate); }
 
 // Exported for imapPool.test.js, which pins how many connections a stalled pool opens.
-export async function acquirePooledClient(account) {
+export async function acquirePooledClient(account, { background = false } = {}) {
   const id = account.id;
   if (!connectionPools.has(id)) {
     connectionPools.set(id, { clients: [], inUse: new Set(), waiters: [], pending: 0 });
   }
   const pool = connectionPools.get(id);
+
+  if (background && (pool.inUse.size || pool.pending || pool.waiters.length)) {
+    throw Object.assign(new Error('Background body fetch deferred'), { backgroundDeferred: true });
+  }
 
   // Find an idle client
   const idle = pool.clients.find(c => !pool.inUse.has(c));
@@ -1757,8 +1761,8 @@ export function evictPool(accountId) {
   connectionPools.delete(accountId);
 }
 
-async function withFreshClient(account, fn) {
-  const client = await acquirePooledClient(account);
+async function withFreshClient(account, fn, options) {
+  const client = await acquirePooledClient(account, options);
   try {
     return await fn(client);
   } catch (err) {
@@ -6159,10 +6163,13 @@ export class ImapManager {
     // FIRST attempt too: a brand-new login avoids both contending with flag writes on the
     // size-2 pool and inheriting a frozen/half-open pooled session view that would hang the
     // fetch until its command timeout. Other providers keep pool-first for TLS reuse.
-    const firstAcquire = providerProfile(account).preferFreshBodyFetch ? withFreshLogin : withFreshClient;
+    const firstAcquire = searchOnly
+      ? (acct, fn) => withFreshClient(acct, fn, { background: true })
+      : providerProfile(account).preferFreshBodyFetch ? withFreshLogin : withFreshClient;
     try {
       return await doFetch(firstAcquire);
     } catch (firstErr) {
+      if (firstErr.backgroundDeferred) throw firstErr;
       const detail = extractImapError(firstErr);
       // Retry once on any transient connection-level error (dead pool connection,
       // half-open TCP, NAT expiry, commandTimeout, socket reset, or an empty UID FETCH
@@ -6180,6 +6187,7 @@ export class ImapManager {
         /EPIPE/.test(detail)
       );
       if (isTransient) {
+        if (searchOnly) throw firstErr;
         // No fresh-login retry while the secondary backoff is armed. The entry gate lets a
         // call through during a refusal window only so it can REUSE an idle pooled session;
         // retrying over a brand-new LOGIN is exactly the doomed request the gate exists to
