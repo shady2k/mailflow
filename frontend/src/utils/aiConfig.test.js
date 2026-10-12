@@ -406,3 +406,13 @@ describe('createCodexDevicePoller', () => {
   });
 
 });
+
+describe('additional AI header form payloads', () => {
+  it('preserves masked saved values and omits only wholly blank rows', () => {
+    const form = normalizeAiForm({ provider: 'api-key', apiKeyConfig: { baseUrl: 'http://synthetic.invalid/v1', model: 'synthetic', headers: [{ name: 'x-opencode-session', value: '••••••••' }, { name: '', value: '' }, { name: '', value: 'invalid nonempty' }] } });
+    assert.equal(form.apiKeyConfig.headers[0].value, '••••••••');
+    const payload = buildAiSavePayload(form);
+    assert.deepEqual(payload.apiKeyConfig.headers, [{ name: 'x-opencode-session', value: '••••••••' }, { name: '', value: 'invalid nonempty' }]);
+    assert.deepEqual(buildAiSavePayload({ ...form, apiKeyConfig: { ...form.apiKeyConfig, headers: [] } }).apiKeyConfig.headers, []);
+  });
+});

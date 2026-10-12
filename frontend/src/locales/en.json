@@ -1356,7 +1356,14 @@
       "copied": "Copied",
       "copyFailed": "Could not copy the code.",
       "openAuthorization": "Open authorization page",
-      "deviceExpires": "Code expires at {{time}}."
+      "deviceExpires": "Code expires at {{time}}.",
+      "headersTitle": "Additional HTTP headers",
+      "headerName": "Header",
+      "headerValue": "Value",
+      "headerAdd": "Add header",
+      "headerRemove": "Remove header",
+      "headerStored": "Saved value (unchanged)",
+      "headersHint": "Example: x-opencode-session = {session_id}. Each AI task has its own random ID, reused for its retries. Values are encrypted and hidden after saving. Names are case-insensitive; system/auth headers cannot be overridden. Values must be printable ASCII. Limit: 20 headers, 2048 characters per value, 16 KiB total."
     },
     "aiActions": {
       "description": "Create your own AI actions. They appear in the AI menu when reading a message, alongside Summarize. Each action's prompt is applied to the message content.",

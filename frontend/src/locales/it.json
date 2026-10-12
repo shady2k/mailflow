@@ -1356,7 +1356,14 @@
       "copied": "Copiato",
       "copyFailed": "Impossibile copiare il codice.",
       "openAuthorization": "Apri pagina di autorizzazione",
-      "deviceExpires": "Il codice scade alle {{time}}."
+      "deviceExpires": "Il codice scade alle {{time}}.",
+      "headersTitle": "Intestazioni HTTP aggiuntive",
+      "headerName": "Intestazione",
+      "headerValue": "Valore",
+      "headerAdd": "Aggiungi intestazione",
+      "headerRemove": "Rimuovi intestazione",
+      "headerStored": "Valore salvato (invariato)",
+      "headersHint": "Esempio: x-opencode-session = {session_id}. Ogni attività IA ha un ID casuale che resta invariato nei nuovi tentativi. I valori sono cifrati e nascosti dopo il salvataggio. Le intestazioni di sistema e autenticazione sono protette. ASCII stampabile: massimo 20 intestazioni, 2048 caratteri per valore e 16 KiB totali."
     },
     "aiActions": {
       "description": "Crea le tue azioni IA. Appaiono nel menu IA durante la lettura di un messaggio, accanto a Riassumi. Il prompt di ogni azione viene applicato al contenuto del messaggio.",

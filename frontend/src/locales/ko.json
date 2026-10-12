@@ -1356,7 +1356,14 @@
       "cancelling": "취소 중…",
       "connecting": "시작 중…",
       "copyFailed": "코드를 복사할 수 없습니다.",
-      "deviceExpires": "코드는 {{time}}에 만료됩니다."
+      "deviceExpires": "코드는 {{time}}에 만료됩니다.",
+      "headersTitle": "추가 HTTP 헤더",
+      "headerName": "헤더",
+      "headerValue": "값",
+      "headerAdd": "헤더 추가",
+      "headerRemove": "헤더 삭제",
+      "headerStored": "저장된 값 (변경 없음)",
+      "headersHint": "예: x-opencode-session = {session_id}. 각 AI 작업에는 재시도 시 유지되는 고유한 임의 ID가 있습니다. 값은 암호화되며 저장 후 숨겨집니다. 시스템 및 인증 헤더는 보호됩니다. 인쇄 가능한 ASCII만 사용하세요. 최대 20개 헤더, 값당 2048자, 총 16 KiB입니다."
     },
     "aiActions": {
       "remove": "제거",

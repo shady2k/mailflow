@@ -1,3 +1,4 @@
+import AiHeadersEditor from './AiHeadersEditor.jsx';
 import BodyIndexStatus from './BodyIndexStatus.jsx';
 import { useCallback, useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -4253,7 +4254,7 @@ function AISection() {
   const handleTest = async () => {
     setTesting(true); setMsg(null);
     try {
-      await api.ai.test();
+      await api.ai.test(buildAiSavePayload(form));
       setMsg({ type: 'ok', text: t('admin.ai.testOk') });
     } catch (err) {
       setMsg({ type: 'error', text: `${t('admin.ai.testFail')}: ${err.message}` });
@@ -4422,7 +4423,8 @@ function AISection() {
             {field(t('admin.ai.baseUrl'), form.apiKeyConfig.baseUrl, value => setForm(f => ({ ...f, apiKeyConfig: { ...f.apiKeyConfig, baseUrl: value } })), 'text', t('admin.ai.baseUrlPh'))}
             {field(t('admin.ai.apiKey'), form.apiKeyConfig.apiKey, value => setForm(f => ({ ...f, apiKeyConfig: { ...f.apiKeyConfig, apiKey: value } })), 'password', t('admin.ai.apiKeyPh'))}
             {field(t('admin.ai.model'), form.apiKeyConfig.model, value => setForm(f => ({ ...f, apiKeyConfig: { ...f.apiKeyConfig, model: value } })), 'text', t('admin.ai.modelPh'))}
-            {config?.provider === AI_PROVIDER_API_KEY && (
+            <AiHeadersEditor headers={form.apiKeyConfig.headers} inputStyle={inputStyle} onChange={headers => setForm(f => ({ ...f, apiKeyConfig: { ...f.apiKeyConfig, headers } }))} />
+            {(
               <button type="button" onClick={handleTest} disabled={testing} style={{ fontSize: 12, padding: '6px 12px', marginBottom: 14, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text-primary)', cursor: testing ? 'default' : 'pointer', opacity: testing ? 0.6 : 1 }}>
                 {testing ? t('admin.ai.testing') : t('admin.ai.test')}
               </button>

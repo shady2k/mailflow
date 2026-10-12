@@ -163,3 +163,5 @@ export async function setMessageAnnotation(accountId, messageId, pluginId, patch
   );
   return rowCount;
 }
+
+export { getMessageAiTaskContext } from './aiTaskContext.js';

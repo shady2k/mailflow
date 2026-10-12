@@ -174,6 +174,14 @@ describe('admin authorization and configuration', () => {
     expect(mocks.testAiProvider).toHaveBeenCalledTimes(1);
   });
 
+  it('forwards edited unsaved provider config to connection testing', async () => {
+    const body = { provider: 'api-key', apiKeyConfig: { baseUrl: 'http://synthetic.invalid/v1', model: 'fake', headers: [{ name: 'x-opencode-session', value: '{session_id}' }] } };
+    const response = await request('/api/admin/ai/test', { method: 'POST', body });
+    expect(response.status).toBe(200);
+    expect(mocks.testAiProvider).toHaveBeenCalledWith(body);
+    expect(mocks.saveAiConfig).not.toHaveBeenCalled();
+  });
+
   it('does not expose upstream diagnostics when a provider test fails', async () => {
     mocks.testAiProvider.mockRejectedValue(Object.assign(
       new Error('access-token-secret and mailbox content'),

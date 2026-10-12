@@ -1885,7 +1885,14 @@
       "copied": "Zkopírováno",
       "copyFailed": "Kód se nepodařilo zkopírovat.",
       "openAuthorization": "Otevřít autorizační stránku",
-      "deviceExpires": "Platnost kódu vyprší v {{time}}."
+      "deviceExpires": "Platnost kódu vyprší v {{time}}.",
+      "headersTitle": "Další HTTP hlavičky",
+      "headerName": "Hlavička",
+      "headerValue": "Hodnota",
+      "headerAdd": "Přidat hlavičku",
+      "headerRemove": "Odstranit hlavičku",
+      "headerStored": "Uložená hodnota (beze změny)",
+      "headersHint": "Příklad: x-opencode-session = {session_id}. Každá AI úloha má vlastní náhodné ID, které se při opakování zachová. Hodnoty jsou šifrované a po uložení skryté. Systémové a autentizační hlavičky jsou chráněné. Používejte tisknutelné ASCII: nejvýše 20 hlaviček, 2048 znaků na hodnotu a celkem 16 KiB."
     },
     "aiActions": {
       "description": "Vytvořte si vlastní akce AI. Při čtení zprávy se zobrazí v nabídce AI vedle možnosti Shrnout. Pokyn každé akce se použije na obsah zprávy.",

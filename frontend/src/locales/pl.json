@@ -1375,7 +1375,14 @@
       "copied": "Skopiowano",
       "copyFailed": "Nie udało się skopiować kodu.",
       "openAuthorization": "Otwórz stronę autoryzacji",
-      "deviceExpires": "Kod wygasa {{time}}."
+      "deviceExpires": "Kod wygasa {{time}}.",
+      "headersTitle": "Dodatkowe nagłówki HTTP",
+      "headerName": "Nagłówek",
+      "headerValue": "Wartość",
+      "headerAdd": "Dodaj nagłówek",
+      "headerRemove": "Usuń nagłówek",
+      "headerStored": "Zapisana wartość (bez zmian)",
+      "headersHint": "Przykład: x-opencode-session = {session_id}. Każde zadanie AI ma losowy identyfikator zachowany przy ponawianiu. Wartości są szyfrowane i ukrywane po zapisaniu. Nagłówki systemowe i uwierzytelniania są chronione. Drukowalne ASCII: najwyżej 20 nagłówków, 2048 znaków na wartość i łącznie 16 KiB."
     },
     "aiActions": {
       "description": "Utwórz własne działania AI. Pojawią się w menu AI podczas czytania wiadomości, obok działania „Podsumuj”. Monit każdego działania zostanie zastosowany do treści wiadomości.",

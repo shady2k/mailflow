@@ -99,9 +99,9 @@ router.delete('/admin/ai', requireAdmin, async (_req, res) => {
   }
 });
 
-router.post('/admin/ai/test', requireAdmin, async (_req, res) => {
+router.post('/admin/ai/test', requireAdmin, async (req, res) => {
   try {
-    res.json(await testAiProvider());
+    res.json(await testAiProvider(req.body));
   } catch (error) {
     serviceError(res, error, 'AI provider test failed');
   }

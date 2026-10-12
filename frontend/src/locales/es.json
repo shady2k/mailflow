@@ -1356,7 +1356,14 @@
       "copied": "Copiado",
       "copyFailed": "No se pudo copiar el código.",
       "openAuthorization": "Abrir página de autorización",
-      "deviceExpires": "El código caduca a las {{time}}."
+      "deviceExpires": "El código caduca a las {{time}}.",
+      "headersTitle": "Encabezados HTTP adicionales",
+      "headerName": "Encabezado",
+      "headerValue": "Valor",
+      "headerAdd": "Añadir encabezado",
+      "headerRemove": "Eliminar encabezado",
+      "headerStored": "Valor guardado (sin cambios)",
+      "headersHint": "Ejemplo: x-opencode-session = {session_id}. Cada tarea de IA tiene un ID aleatorio que se conserva al reintentar. Los valores se cifran y se ocultan tras guardarlos. Los encabezados de sistema y autenticación están protegidos. ASCII imprimible: máximo 20 encabezados, 2048 caracteres por valor y 16 KiB en total."
     },
     "aiActions": {
       "description": "Crea tus propias acciones de IA. Aparecen en el menú de IA al leer un mensaje, junto a Resumir. El prompt de cada acción se aplica al contenido del mensaje.",

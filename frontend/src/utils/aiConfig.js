@@ -58,6 +58,7 @@ export function normalizeAiForm(raw = {}) {
       baseUrl: cleanBaseUrl(apiKeyConfig.baseUrl),
       apiKey: typeof apiKeyConfig.apiKey === 'string' ? apiKeyConfig.apiKey : '',
       model: cleanString(apiKeyConfig.model),
+      ...(Array.isArray(apiKeyConfig.headers) ? { headers: apiKeyConfig.headers.map(h => ({ name: h.name, value: h.value })) } : {}),
     },
     chatgptConfig: {
       model: cleanString(chatgptConfig.model) || DEFAULT_CODEX_MODEL,
@@ -99,7 +100,7 @@ export function buildAiSavePayload(form = {}) {
     provider: normalized.connectionMethod === AI_CONNECTION_METHOD_ACCOUNT
       ? normalized.accountProvider
       : AI_PROVIDER_API_KEY,
-    apiKeyConfig: normalized.apiKeyConfig,
+    apiKeyConfig: { ...normalized.apiKeyConfig, ...(normalized.apiKeyConfig.headers ? { headers: normalized.apiKeyConfig.headers.filter(h => h.name !== '' || h.value !== '') } : {}) },
     chatgptConfig: normalized.chatgptConfig,
     features: normalized.features,
   };

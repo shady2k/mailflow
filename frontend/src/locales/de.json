@@ -1283,7 +1283,14 @@
       "copied": "Kopiert",
       "copyFailed": "Der Code konnte nicht kopiert werden.",
       "openAuthorization": "Autorisierungsseite öffnen",
-      "deviceExpires": "Der Code läuft um {{time}} ab."
+      "deviceExpires": "Der Code läuft um {{time}} ab.",
+      "headersTitle": "Zusätzliche HTTP-Kopfzeilen",
+      "headerName": "Kopfzeile",
+      "headerValue": "Wert",
+      "headerAdd": "Kopfzeile hinzufügen",
+      "headerRemove": "Kopfzeile entfernen",
+      "headerStored": "Gespeicherter Wert (unverändert)",
+      "headersHint": "Beispiel: x-opencode-session = {session_id}. Jede KI-Aufgabe erhält eine eigene zufällige ID, die bei Wiederholungen gleich bleibt. Werte werden verschlüsselt und nach dem Speichern verborgen. System- und Authentifizierungskopfzeilen sind geschützt. Druckbare ASCII-Zeichen: höchstens 20 Kopfzeilen, 2048 Zeichen je Wert und insgesamt 16 KiB."
     },
     "aiActions": {
       "description": "Erstellen Sie eigene KI-Aktionen. Sie erscheinen beim Lesen einer Nachricht im KI-Menü neben „Zusammenfassen“. Der Prompt jeder Aktion wird auf den Nachrichteninhalt angewendet.",

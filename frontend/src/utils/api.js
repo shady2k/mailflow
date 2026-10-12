@@ -461,7 +461,7 @@ export const api = {
     getConfig: () => request('GET', '/admin/ai'),
     saveConfig: (data) => request('PATCH', '/admin/ai', data),
     deleteConfig: () => request('DELETE', '/admin/ai'),
-    test: () => request('POST', '/admin/ai/test'),
+    test: (data) => request('POST', '/admin/ai/test', data),
     status: () => request('GET', '/ai/status'),
     chat: streamAiChat,
     codex: {

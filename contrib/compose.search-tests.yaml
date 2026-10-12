@@ -25,7 +25,7 @@ services:
     volumes: ["..:/repo:ro"]
     environment:
       SEARCH_TEST_DATABASE_URL: postgres://search_test:public-synthetic-test@pg16/search_test
-    command: [node, --test, src/services/unicodeSearch.postgres.mjs]
+    command: [node, --test, src/services/unicodeSearch.postgres.mjs, src/services/aiHeaders.postgres.mjs]
     depends_on:
       pg16: {condition: service_healthy}
     networks: [internal]
@@ -35,7 +35,7 @@ services:
     volumes: ["..:/repo:ro"]
     environment:
       SEARCH_TEST_DATABASE_URL: postgres://search_test:public-synthetic-test@pg18/search_test
-    command: [node, --test, src/services/unicodeSearch.postgres.mjs]
+    command: [node, --test, src/services/unicodeSearch.postgres.mjs, src/services/aiHeaders.postgres.mjs]
     depends_on:
       pg18: {condition: service_healthy}
     networks: [internal]

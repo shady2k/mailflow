@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+const require = createRequire('/app/package.json'); const bcrypt = require('bcryptjs');
+assert.equal(process.env.APP_URL,'http://localhost:18090');assert.equal(process.env.DB_PASSWORD,'public-synthetic-ai-database');
+const {query,pool}=await import('/app/src/services/db.js');
+assert.equal((await query('SELECT count(*)::int AS n FROM users')).rows[0].n,0,'Fresh synthetic DB required');
+const user=(await query("INSERT INTO users(username,password_hash,is_admin,preferences) VALUES('demo',$1,true,$2) RETURNING id",[await bcrypt.hash('DemoMail123!',10),{language:'ru',layout:'inbox'}])).rows[0];
+for(const name of ['alice','bob'])await query('INSERT INTO email_accounts(user_id,name,email_address,enabled) VALUES($1,$2,$3,false)',[user.id,'Synthetic '+name,name+'@lab.test']);
+await query("INSERT INTO system_settings(key,value) VALUES('allow_private_hosts','true') ON CONFLICT(key) DO UPDATE SET value='true'");
+console.log('Fresh synthetic admin and disabled fixture accounts created');await pool.end();

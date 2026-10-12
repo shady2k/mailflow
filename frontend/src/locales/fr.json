@@ -1356,7 +1356,14 @@
       "copied": "Copié",
       "copyFailed": "Impossible de copier le code.",
       "openAuthorization": "Ouvrir la page d’autorisation",
-      "deviceExpires": "Le code expire à {{time}}."
+      "deviceExpires": "Le code expire à {{time}}.",
+      "headersTitle": "En-têtes HTTP supplémentaires",
+      "headerName": "En-tête",
+      "headerValue": "Valeur",
+      "headerAdd": "Ajouter un en-tête",
+      "headerRemove": "Supprimer un en-tête",
+      "headerStored": "Valeur enregistrée (inchangée)",
+      "headersHint": "Exemple : x-opencode-session = {session_id}. Chaque tâche IA reçoit un identifiant aléatoire conservé lors des nouvelles tentatives. Les valeurs sont chiffrées et masquées après enregistrement. Les en-têtes système et authentification sont protégés. ASCII imprimable : 20 en-têtes maximum, 2048 caractères par valeur et 16 Kio au total."
     },
     "aiActions": {
       "description": "Créez vos propres actions IA. Elles apparaissent dans le menu IA lors de la lecture d'un message, à côté de Résumer. Le prompt de chaque action est appliqué au contenu du message.",

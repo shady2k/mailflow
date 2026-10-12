@@ -1356,7 +1356,14 @@
       "copied": "Copiado",
       "copyFailed": "Não foi possível copiar o código.",
       "openAuthorization": "Abrir página de autorização",
-      "deviceExpires": "O código expira às {{time}}."
+      "deviceExpires": "O código expira às {{time}}.",
+      "headersTitle": "Cabeçalhos HTTP adicionais",
+      "headerName": "Cabeçalho",
+      "headerValue": "Valor do cabeçalho",
+      "headerAdd": "Adicionar cabeçalho",
+      "headerRemove": "Remover cabeçalho",
+      "headerStored": "Valor salvo (sem alterações)",
+      "headersHint": "Exemplo: x-opencode-session = {session_id}. Cada tarefa de IA tem um ID aleatório preservado nas novas tentativas. Os valores são criptografados e ocultados após salvar. Cabeçalhos de sistema e autenticação são protegidos. ASCII imprimível: até 20 cabeçalhos, 2048 caracteres por valor e 16 KiB no total."
     },
     "aiActions": {
       "description": "Crie suas próprias ações de IA. Elas aparecem no menu de IA ao ler uma mensagem, junto com Resumir. O prompt de cada ação é aplicado ao conteúdo da mensagem.",

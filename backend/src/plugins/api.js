@@ -101,4 +101,5 @@ export {
   getMessageFields,
   getMessageAnnotations,
   setMessageAnnotation,
+  getMessageAiTaskContext,
 } from '../services/mailAccess.js';

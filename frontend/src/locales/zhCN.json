@@ -1356,7 +1356,14 @@
       "copied": "已复制",
       "copyFailed": "无法复制代码。",
       "openAuthorization": "打开授权页面",
-      "deviceExpires": "代码将于 {{time}} 过期。"
+      "deviceExpires": "代码将于 {{time}} 过期。",
+      "headersTitle": "附加 HTTP 请求头",
+      "headerName": "请求头",
+      "headerValue": "请求头值",
+      "headerAdd": "添加请求头",
+      "headerRemove": "删除请求头",
+      "headerStored": "已保存的值（保持不变）",
+      "headersHint": "示例：x-opencode-session = {session_id}。每个 AI 任务都有独立的随机 ID，重试时保持不变。值会加密保存并在保存后隐藏。系统和认证请求头受到保护。仅使用可打印 ASCII 字符：最多 20 个请求头，每个值最多 2048 个字符，总计最多 16 KiB。"
     },
     "aiActions": {
       "description": "创建你自己的 AI 操作。它们会在阅读邮件时出现在 AI 菜单中，与“摘要”并列。每个操作的提示词会应用于邮件内容。",

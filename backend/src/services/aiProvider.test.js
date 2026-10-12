@@ -513,3 +513,79 @@ describe('status and provider test', () => {
     await expect(provider.testAiProvider()).resolves.toEqual({ ok: true });
   });
 });
+
+describe('additional encrypted API headers and task scope', () => {
+  const initial = { provider: AI_PROVIDER_API_KEY, apiKeyConfig: { baseUrl: 'https://synthetic.invalid/v1', model: 'synthetic-model', apiKey: 'encrypted:synthetic-key' } };
+  it('stores encrypted values, redacts GET/save responses, preserves masks and supports explicit removal', async () => {
+    const { provider, settings } = factory({ initial });
+    const input = { ...initial, apiKeyConfig: { ...initial.apiKeyConfig, apiKey: MASKED_API_KEY, headers: [{ name: 'X-Custom-Token', value: 'synthetic-secret' }, { name: 'x-opencode-session', value: '{session_id}' }] } };
+    const publicSaved = await provider.saveAiConfig(input);
+    expect(settings.read().apiKeyConfig.headers[0].value).toBe('encrypted:synthetic-secret');
+    expect(publicSaved.apiKeyConfig.headers.every(h => h.value === MASKED_API_KEY)).toBe(true);
+    expect(await provider.getAdminAiConfig()).toEqual(publicSaved);
+    await provider.saveAiConfig(publicSaved);
+    expect(settings.read().apiKeyConfig.headers[0].value).toBe('encrypted:synthetic-secret');
+    await provider.saveAiConfig({ ...publicSaved, apiKeyConfig: { ...publicSaved.apiKeyConfig, headers: [] } });
+    expect(settings.read().apiKeyConfig.headers).toEqual([]);
+  });
+  it.each([
+    [{ name: '', value: 'value' }], [{ name: 'bad\r\nname', value: 'value' }],
+    [{ name: 'x-ok', value: 'bad\r\nInjected: value' }],
+    [{ name: 'x-ok', value: 'value' }, { name: 'X-OK', value: 'other' }],
+    ...['Host', 'Content-Length', 'Connection', 'Authorization', 'Proxy-Authorization', 'X-API-Key', 'Cookie', 'Content-Type'].map(name => [{ name, value: 'value' }]),
+    [{ name: 'x-ok', value: 'v'.repeat(2049) }], Array.from({ length: 21 }, (_, i) => ({ name: 'x-'+i, value: '' })),
+  ].map(headers => [headers]))('rejects invalid/reserved/injected header configuration without a provider request', async headers => {
+    const { provider, deps } = factory({ initial });
+    await expect(provider.saveAiConfig({ ...initial, apiKeyConfig: { ...initial.apiKeyConfig, headers } })).rejects.toMatchObject({ status: 400 });
+    expect(deps.fetchFn).not.toHaveBeenCalled();
+  });
+  it('preserves case-only masked edits, requires replacement for renamed masked values, and enforces total size', async () => {
+    const { provider, settings } = factory({ initial });
+    const saved = await provider.saveAiConfig({ ...initial, apiKeyConfig: { ...initial.apiKeyConfig, headers: [{ name: 'x-secret', value: 'public-synthetic-value' }] } });
+    await provider.saveAiConfig({ ...saved, apiKeyConfig: { ...saved.apiKeyConfig, headers: [{ name: 'X-SECRET', value: MASKED_API_KEY }] } });
+    expect(settings.read().apiKeyConfig.headers[0].value).toBe('encrypted:public-synthetic-value');
+    const before = settings.read();
+    await expect(provider.saveAiConfig({ ...saved, apiKeyConfig: { ...saved.apiKeyConfig, headers: [{ name: 'x-renamed', value: MASKED_API_KEY }] } })).rejects.toMatchObject({ status: 400 });
+    expect(settings.read()).toEqual(before);
+    const headers = Array.from({ length: 20 }, (_, i) => ({ name: 'x-header-'+i, value: 'v'.repeat(1000) }));
+    await expect(provider.saveAiConfig({ ...saved, apiKeyConfig: { ...saved.apiKeyConfig, headers } })).rejects.toMatchObject({ status: 400 });
+  });
+  it('tests the edited unsaved form without writing settings or returning secrets', async () => {
+    const { provider, settings, deps } = factory({ initial, fetchFn: vi.fn().mockResolvedValue(jsonResponse({ choices: [{ message: { content: 'ok' } }] })) });
+    await provider.testAiProvider({ ...initial, apiKeyConfig: { baseUrl: 'https://edited.synthetic.invalid/v1', model: 'edited', apiKey: 'synthetic-unsaved-key', headers: [{ name: 'x-opencode-session', value: '{session_id}' }, { name: 'x-static', value: 'synthetic-static' }, { name: '__proto__', value: 'synthetic-proto' }] } });
+    expect(settings.read()).toEqual(initial);
+    const [url, init] = deps.fetchFn.mock.calls[0];
+    expect(url).toBe('https://edited.synthetic.invalid/v1/chat/completions');
+    expect(init.headers['x-static']).toBe('synthetic-static');
+    expect(init.headers['__proto__']).toBe('synthetic-proto');
+    expect(Object.getPrototypeOf(init.headers)).toBeNull();
+    expect(init.headers['x-opencode-session']).toMatch(/^[0-9a-f-]{36}$/);
+    expect(init.headers.Authorization).toBe('Bearer synthetic-unsaved-key');
+    expect(init.redirect).toBe('error');
+  });
+  it('shares a session within an explicit logical task/retry and creates distinct default tasks', async () => {
+    const config = { ...initial, apiKeyConfig: { ...initial.apiKeyConfig, headers: [{ name: 'x-opencode-session', value: 'encrypted:{session_id}' }] } };
+    const fetchFn = vi.fn().mockRejectedValueOnce(new Error('synthetic transient')).mockImplementation(async () => jsonResponse({ choices: [{ message: { content: 'ok' } }] }));
+    const { provider } = factory({ initial: config, fetchFn });
+    const taskContext = { sessionId: '12345678-1234-4234-8234-123456789abc' };
+    await expect(provider.completeText([{ role: 'user', content: 'synthetic' }], { taskContext })).rejects.toThrow();
+    await provider.completeText([{ role: 'user', content: 'synthetic retry' }], { taskContext });
+    await provider.completeText([{ role: 'user', content: 'another task' }]);
+    expect(fetchFn.mock.calls[0][1].headers['x-opencode-session']).toBe(taskContext.sessionId);
+    expect(fetchFn.mock.calls[1][1].headers['x-opencode-session']).toBe(taskContext.sessionId);
+    expect(fetchFn.mock.calls[2][1].headers['x-opencode-session']).not.toBe(taskContext.sessionId);
+  });
+  it('applies custom headers to streaming calls and keeps provider/network errors secret-free', async () => {
+    const initialWithHeaders = { ...initial, apiKeyConfig: { ...initial.apiKeyConfig, headers: [{ name: 'x-private', value: 'encrypted:synthetic-private' }] } };
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { provider, deps } = factory({ initial: initialWithHeaders, fetchFn: vi.fn().mockResolvedValue(sseResponse([completionEvent('ok'), 'data: [DONE]\n\n'])) });
+    expect(await collect(provider.streamChat([{ role: 'user', content: 'synthetic' }]))).toEqual(['ok']);
+    expect(deps.fetchFn.mock.calls[0][1].headers['x-private']).toBe('synthetic-private');
+    deps.fetchFn.mockResolvedValue(jsonResponse({ error: { message: 'echo synthetic-private synthetic-key' } }, 400));
+    const err = await provider.testAiProvider().catch(e => e);
+    expect(err.message).not.toContain('synthetic-private');expect(err.message).not.toContain('synthetic-key');
+    deps.fetchFn.mockRejectedValue(new Error('encoded echo synthetic-private'));
+    const network = await provider.completeText([]).catch(e => e);expect(network.message).not.toContain('synthetic-private');
+    expect(errorLog).not.toHaveBeenCalled();errorLog.mockRestore();
+  });
+});

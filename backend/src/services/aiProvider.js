@@ -1,3 +1,4 @@
+import { createAiTaskContext, validateAiHeaders, resolveAiHeaders, MASKED_HEADER_VALUE } from './aiHeaders.js';
 import { decrypt, encrypt } from './encryption.js';
 import { query } from './db.js';
 import { getConnectionPolicy } from './connectionPolicy.js';
@@ -52,6 +53,7 @@ export function normalizeAiConfig(raw = {}) {
       baseUrl: normalizeBaseUrl(apiSource.baseUrl),
       apiKey: apiSource.apiKey || null,
       model: cleanString(apiSource.model),
+      ...(Array.isArray(apiSource.headers) ? { headers: apiSource.headers.map(({ name, value }) => ({ name, value })) } : {}),
     },
     chatgptConfig: {
       model: cleanString(chatgptSource.model) || DEFAULT_CODEX_MODEL,
@@ -70,6 +72,7 @@ function publicConfig(config) {
     apiKeyConfig: {
       ...config.apiKeyConfig,
       apiKey: config.apiKeyConfig.apiKey ? MASKED_API_KEY : '',
+      ...(config.apiKeyConfig.headers ? { headers: config.apiKeyConfig.headers.map(({ name, value }) => ({ name, value: value ? MASKED_HEADER_VALUE : '' })) } : {}),
     },
   };
 }
@@ -89,24 +92,25 @@ function providerError(status, text, secrets = []) {
   return new AiProviderError(`AI provider error (${status})${detail ? `: ${detail}` : ''}`, { status: 502, expose: true });
 }
 
-function providerRequestError(error, request, callerSignal) {
+function providerRequestError(error, request, callerSignal, secrets = [], hideErrors = false) {
   if (request.timedOut()) return new AiProviderError('AI provider request timed out', { status: 504, expose: true });
   if (callerSignal?.aborted) return new AiProviderError('AI provider request was aborted', { status: 499, expose: true });
-  if (error instanceof AiProviderError) return error;
+  if (hideErrors) return new AiProviderError('AI provider request failed', { status: error?.status || 502, expose: true });
+  if (error instanceof AiProviderError) return new AiProviderError(sanitizeText(redactSecrets(error.message, secrets)), { status: error.status, expose: error.expose });
   return new AiProviderError(
-    `AI provider request failed: ${sanitizeText(error?.message) || 'network error'}`,
+    `AI provider request failed: ${sanitizeText(redactSecrets(error?.message || '', secrets)) || 'network error'}`,
     { status: 502, expose: true },
   );
 }
 
-async function openProviderRequest(fetchFn, url, init, { signal, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+async function openProviderRequest(fetchFn, url, init, { signal, timeoutMs = DEFAULT_TIMEOUT_MS, secrets, hideErrors } = {}) {
   const request = createRequestSignal(signal, timeoutMs, 'AI request timed out');
   try {
     const response = await fetchFn(url, { ...init, signal: request.signal });
     return { ...request, response };
   } catch (error) {
     request.cleanup();
-    throw providerRequestError(error, request, signal);
+    throw providerRequestError(error, request, signal, secrets, hideErrors);
   }
 }
 
@@ -158,7 +162,7 @@ export function createAiProvider({
     return publicConfig(await loadAiConfig());
   }
 
-  async function saveAiConfig(input = {}) {
+  async function prepareAiConfig(input = {}) {
     if (!PROVIDERS.has(input.provider)) throw new AiProviderError('Unknown AI provider', { status: 400 });
     if (input.enabled !== false && input.provider === AI_PROVIDER_CHATGPT
         && !cleanString(input.chatgptConfig?.model)) {
@@ -170,9 +174,17 @@ export function createAiProvider({
     const storedKey = typeof incomingKey === 'string' && incomingKey && incomingKey !== MASKED_API_KEY
       ? encryptFn(incomingKey)
       : (existing?.apiKeyConfig.apiKey || null);
+    const storedHeaders = incomingApi.headers === undefined ? existing?.apiKeyConfig.headers : validateAiHeaders(incomingApi.headers).map(entry => {
+      if (entry.value === MASKED_HEADER_VALUE) {
+        const saved = existing?.apiKeyConfig.headers?.find(h => h.name.toLowerCase() === entry.name);
+        if (!saved?.value) throw new AiProviderError('Enter a value for the renamed or new AI header', { status: 400 });
+        return { name: entry.name, value: saved.value };
+      }
+      return { name: entry.name, value: encryptFn(entry.value) };
+    });
     const config = normalizeAiConfig({
       ...input,
-      apiKeyConfig: { ...incomingApi, apiKey: storedKey },
+      apiKeyConfig: { ...incomingApi, apiKey: storedKey, ...(storedHeaders === undefined ? {} : { headers: storedHeaders }) },
     });
 
     if (config.enabled && config.provider === AI_PROVIDER_API_KEY
@@ -182,7 +194,9 @@ export function createAiProvider({
     if (config.provider === AI_PROVIDER_API_KEY && config.apiKeyConfig.baseUrl) {
       let hostname;
       try {
-        hostname = new URL(config.apiKeyConfig.baseUrl).hostname;
+        const url = new URL(config.apiKeyConfig.baseUrl);
+        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Invalid URL');
+        hostname = url.hostname;
       } catch {
         throw new AiProviderError('Invalid API base URL', { status: 400 });
       }
@@ -191,6 +205,11 @@ export function createAiProvider({
       if (hostError) throw new AiProviderError(`API base URL: ${hostError}`, { status: 400 });
     }
 
+    return config;
+  }
+
+  async function saveAiConfig(input = {}) {
+    const config = await prepareAiConfig(input);
     await queryFn(
       `INSERT INTO system_settings (key, value, updated_at) VALUES ('ai_config', $1, NOW())
        ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
@@ -218,14 +237,23 @@ export function createAiProvider({
     return config.apiKeyConfig.apiKey ? decryptFn(config.apiKeyConfig.apiKey) : null;
   }
 
-  function apiKeyHeaders(apiKey) {
-    const headers = { 'Content-Type': 'application/json' };
+  function apiKeyHeaders(config, apiKey, taskContext) {
+    const plain = (config.apiKeyConfig.headers || []).map(h => {
+      const value = decryptFn(h.value);
+      if (typeof value !== 'string') throw new AiProviderError('Stored AI header cannot be decrypted');
+      return { name: h.name, value };
+    });
+    const extra = resolveAiHeaders(plain, taskContext);
+    const headers = Object.create(null);
+    headers['Content-Type'] = 'application/json';
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-    return headers;
+    for (const { name, value } of extra) headers[name] = value;
+    return { headers, secrets: [apiKey, ...plain.map(h => h.value), ...extra.map(h => h.value)], hideErrors: extra.length > 0 };
   }
 
-  async function completeApiKey(config, messages, { signal, maxTokens, allowEmpty = false } = {}) {
+  async function completeApiKey(config, messages, { signal, maxTokens, allowEmpty = false, taskContext } = {}) {
     const apiKey = apiKeyCredential(config);
+    const { headers, secrets, hideErrors } = apiKeyHeaders(config, apiKey, taskContext);
     const body = {
       model: config.apiKeyConfig.model,
       messages,
@@ -234,13 +262,14 @@ export function createAiProvider({
     };
     const request = await openProviderRequest(fetchFn, `${config.apiKeyConfig.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: apiKeyHeaders(apiKey),
+      headers,
+      redirect: 'error',
       body: JSON.stringify(body),
-    }, { signal });
+    }, { signal, secrets, hideErrors });
     try {
       const { response } = request;
       const text = await readLimited(response, response.ok ? JSON_BODY_LIMIT_BYTES : ERROR_BODY_LIMIT_BYTES);
-      if (!response.ok) throw providerError(response.status, text, [apiKey]);
+      if (!response.ok) throw providerError(response.status, text, secrets);
       const parsed = parseJson(text);
       const choice = parsed?.choices?.[0];
       const content = choice?.message?.content;
@@ -261,28 +290,30 @@ export function createAiProvider({
       }
       throw new AiProviderError('AI provider returned an invalid completion', { status: 502, expose: true });
     } catch (error) {
-      throw providerRequestError(error, request, signal);
+      throw providerRequestError(error, request, signal, secrets, hideErrors);
     } finally {
       request.cleanup();
     }
   }
 
-  async function* streamApiKey(config, messages, { signal } = {}) {
+  async function* streamApiKey(config, messages, { signal, taskContext } = {}) {
     const apiKey = apiKeyCredential(config);
+    const { headers, secrets, hideErrors } = apiKeyHeaders(config, apiKey, taskContext);
     const request = await openProviderRequest(fetchFn, `${config.apiKeyConfig.baseUrl}/chat/completions`, {
       method: 'POST',
-      headers: apiKeyHeaders(apiKey),
+      headers,
+      redirect: 'error',
       body: JSON.stringify({ model: config.apiKeyConfig.model, messages, stream: true }),
-    }, { signal, timeoutMs: 120_000 });
+    }, { signal, timeoutMs: 120_000, secrets, hideErrors });
     try {
       const { response } = request;
       if (!response.ok) {
         const text = await readLimited(response, ERROR_BODY_LIMIT_BYTES);
-        throw providerError(response.status, text, [apiKey]);
+        throw providerError(response.status, text, secrets);
       }
-      yield* parseChatCompletionsSse(response, { signal: request.signal, secrets: [apiKey] });
+      yield* parseChatCompletionsSse(response, { signal: request.signal, secrets });
     } catch (error) {
-      throw providerRequestError(error, request, signal);
+      throw providerRequestError(error, request, signal, secrets, hideErrors);
     } finally {
       request.cleanup();
     }
@@ -298,7 +329,12 @@ export function createAiProvider({
   }
 
   async function completeText(messages, options = {}) {
+    options = { ...options, taskContext: options.taskContext || createAiTaskContext() };
     const config = await requireSelectedConfig();
+    return completeWithConfig(config, messages, options);
+  }
+
+  async function completeWithConfig(config, messages, options) {
     if (config.provider === AI_PROVIDER_API_KEY) return completeApiKey(config, messages, options);
     let credentials = await getCodexAccessFn();
     try {
@@ -311,6 +347,7 @@ export function createAiProvider({
   }
 
   async function* streamChat(messages, options = {}) {
+    options = { ...options, taskContext: options.taskContext || createAiTaskContext() };
     const config = await requireSelectedConfig();
     if (config.provider === AI_PROVIDER_API_KEY) {
       yield* streamApiKey(config, messages, options);
@@ -360,15 +397,14 @@ export function createAiProvider({
     };
   }
 
-  async function testAiProvider() {
-    // The connection test only needs to prove the endpoint is reachable, the key
-    // is accepted, and the model returns a well-formed completion. `allowEmpty`
-    // keeps it from failing on reasoning models that spend the small token budget
-    // on reasoning and return empty content (see completeApiKey).
-    await completeText(
-      [{ role: 'user', content: 'Reply with only the word "ok".' }],
-      { maxTokens: 16, allowEmpty: true },
-    );
+  async function testAiProvider(input) {
+    const messages = [{ role: 'user', content: 'Reply with only the word "ok".' }];
+    const options = { maxTokens: 16, allowEmpty: true, taskContext: createAiTaskContext() };
+    const config = input && Object.keys(input).length ? await prepareAiConfig(input) : await requireSelectedConfig();
+    if (config.provider === AI_PROVIDER_API_KEY && (!config.apiKeyConfig.baseUrl || !config.apiKeyConfig.model)) {
+      throw new AiProviderError('API base URL and model name are required', { status: 400 });
+    }
+    await completeWithConfig(config, messages, options);
     return { ok: true };
   }
 

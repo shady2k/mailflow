@@ -67,11 +67,11 @@ export async function summarizeAvailable() {
 // Summarize one message into a sanitised ≤maxLen line, or null when the output is unusable or
 // the provider errors. Never throws. Does NOT check summarizeAvailable() itself — a batching
 // caller should gate once up front; a one-off caller can call summarizeAvailable() first.
-export async function summarizeMessage({ subject, from, content, maxLen = SUMMARY_MAX_LEN } = {}) {
+export async function summarizeMessage({ subject, from, content, maxLen = SUMMARY_MAX_LEN, taskContext } = {}) {
   try {
     const response = await completeText(
       [{ role: 'user', content: buildSummaryPrompt({ subject, from, content, maxLen }) }],
-      { maxTokens: maxLen }
+      { maxTokens: maxLen, ...(taskContext ? { taskContext } : {}) }
     );
     return sanitizeSummaryLine(response, maxLen);
   } catch {

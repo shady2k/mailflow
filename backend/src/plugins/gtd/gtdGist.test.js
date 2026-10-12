@@ -85,13 +85,14 @@ describe('queueGistGeneration — provider gating', () => {
 describe('queueGistGeneration — write path', () => {
   const isBodySelect = (sql) => /FROM messages/i.test(sql) && /SELECT id, subject/i.test(sql);
   // The gist is now stored as a plugin annotation on the message (jsonb_set into plugin_annotations).
-  const isGistUpdate = (sql) => /UPDATE messages\s+SET plugin_annotations/i.test(sql);
+  const isGistUpdate = (sql) => /UPDATE messages\s+SET plugin_annotations/i.test(sql) && !/RETURNING/i.test(sql);
 
   // Route query() by SQL rather than by call order: GIST_CONCURRENCY runs UPDATEs from
   // the pool concurrently, so their relative ordering isn't deterministic. The body
   // SELECT echoes one row per requested id so the pool has real work to do.
   function mockDb({ updateRowCount = 1 } = {}) {
     query.mockImplementation((sql, params) => {
+      if (/aiSummarySessionId/.test(sql)) return Promise.resolve({ rows: [{ session_id: params[3] }], rowCount: 1 });
       if (isBodySelect(sql)) {
         const ids = params[0];
         return Promise.resolve({
@@ -128,7 +129,7 @@ describe('queueGistGeneration — write path', () => {
 
     expect(completeText).toHaveBeenCalledWith([
       { role: 'user', content: expect.stringContaining('Subject: S w1') },
-    ], { maxTokens: 120 });
+    ], expect.objectContaining({ maxTokens: 120, taskContext: { sessionId: expect.any(String) } }));
     expect(fetch).not.toHaveBeenCalled();
 
     const selectCall = query.mock.calls.find((c) => isBodySelect(c[0]));
@@ -138,7 +139,7 @@ describe('queueGistGeneration — write path', () => {
 
     // Persists the sanitised gist under the message's GTD annotation namespace (account-scoped).
     const updateCall = query.mock.calls.find((c) => isGistUpdate(c[0]));
-    expect(updateCall[1]).toEqual(['a1', 'w1', 'gtd', JSON.stringify({ gist: 'waiting on their reply' })]);
+    expect(updateCall[1]).toEqual(['a1', 'w1', 'gtd', JSON.stringify({ gist: 'waiting on their reply', aiSummarySessionId: null })]);
 
     expect(broadcast).toHaveBeenCalledTimes(1);
     expect(broadcast).toHaveBeenCalledWith({ type: 'gtd_sections_updated', accountId: 'a1' }, 'u1');
@@ -177,6 +178,7 @@ describe('queueGistGeneration — write path', () => {
     const configGate = new Promise((resolve) => { releaseConfig = resolve; });
     getAiStatus.mockImplementation(() => configGate.then(() => ({ enabled: true, features: { summarize: true } })));
     query.mockImplementation((sql, params) => {
+      if (/aiSummarySessionId/.test(sql)) return Promise.resolve({ rows: [{ session_id: params[3] }], rowCount: 1 });
       if (isBodySelect(sql)) {
         const ids = params[0];
         return Promise.resolve({ rows: ids.map((id) => ({ id, subject: 'S', from_name: 'A', from_email: 'a@x', content: 'b' })) });

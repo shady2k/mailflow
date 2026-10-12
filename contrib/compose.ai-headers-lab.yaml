@@ -1,0 +1,56 @@
+name: mailflow-ai-headers-lab
+services:
+  frontend:
+    image: sha256:5e3f4f18b7d11b61314b8a2eb454e184ddd2916d21a0d7e151d7122b1f84611f
+    ports: ["127.0.0.1:18090:80"]
+    environment: {NGINX_TLS: "off"}
+    volumes: ["${MAILFLOW_FORK_ROOT:?Set MAILFLOW_FORK_ROOT}/frontend/dist:/usr/share/nginx/html:ro"]
+    depends_on:
+      backend: {condition: service_healthy}
+    networks: [web, internal]
+  backend:
+    image: sha256:7975c294d2152d47d5e39aa64443c307894719771d909c686901289f69eb9c20
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      SESSION_SECRET: public-synthetic-ai-session-secret-for-local-test-only
+      ENCRYPTION_KEY: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+      APP_URL: http://localhost:18090
+      FRONTEND_URL: http://localhost:18090
+      DB_HOST: postgres
+      DB_NAME: mailflow
+      DB_USER: mailflow
+      DB_PASSWORD: public-synthetic-ai-database
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ${MAILFLOW_FORK_ROOT:?Set MAILFLOW_FORK_ROOT}/backend/src:/app/src:ro
+      - ${MAILFLOW_FORK_ROOT:?Set MAILFLOW_FORK_ROOT}/backend/migrations:/app/migrations:ro
+      - ${MAILFLOW_FORK_ROOT:?Set MAILFLOW_FORK_ROOT}/scripts:/tests:ro
+    healthcheck:
+      test: [CMD-SHELL, "wget -qO- http://localhost:3000/api/health || exit 1"]
+      interval: 2s
+      retries: 30
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    networks: [internal]
+  postgres:
+    image: postgres@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    environment: {POSTGRES_DB: mailflow, POSTGRES_USER: mailflow, POSTGRES_PASSWORD: public-synthetic-ai-database}
+    tmpfs: [/var/lib/postgresql]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U mailflow -d mailflow"]
+      interval: 2s
+      retries: 30
+    networks: [internal]
+  redis:
+    image: redis@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 2s
+      retries: 30
+    networks: [internal]
+networks:
+  web:
+  internal:
+    internal: true
