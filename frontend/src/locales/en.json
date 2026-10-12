@@ -1906,15 +1906,7 @@
     "spam": "Spam",
     "archive": "Archive"
   },
-  "search": {
-    "indexUnavailable": "Search indexing status unavailable",
-    "indexProgress": "Headers: {{headers}} · Bodies searchable: {{bodies}}/{{headers}}",
-    "indexRetrying": "Retrying: {{count}}",
-    "indexSettingsTitle": "Search indexing",
-    "indexScope": "Coverage includes headers already synchronized; pending bodies are indexed automatically with retries.",
-    "indexPending": "Pending: {{count}}",
-    "indexRefresh": "Refresh status"
-  },
+  "search": {},
   "searchIndex": {
     "title": "Search and indexing",
     "description": "Full-body search covers messages whose headers have been loaded. Coverage grows as background indexing downloads the missing text.",

@@ -1925,15 +1925,7 @@
     "spam": "Spam",
     "archive": "Archiv"
   },
-  "search": {
-    "indexUnavailable": "Stav indexování vyhledávání není dostupný",
-    "indexProgress": "Hlavičky: {{headers}} · Prohledávatelná těla: {{bodies}}/{{headers}}",
-    "indexRetrying": "Opakované pokusy: {{count}}",
-    "indexSettingsTitle": "Indexace vyhledávání",
-    "indexScope": "Pokrytí zahrnuje již synchronizované hlavičky. Zbývající těla se indexují automaticky s opakováním při chybách.",
-    "indexPending": "Čeká: {{count}}",
-    "indexRefresh": "Obnovit stav"
-  },
+  "search": {},
   "searchIndex": {
     "title": "Hledání a indexování",
     "description": "Fulltextové hledání zahrnuje zprávy s načtenými hlavičkami. Pokrytí roste, když indexování na pozadí stahuje chybějící text.",

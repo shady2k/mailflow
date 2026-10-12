@@ -1906,15 +1906,7 @@
     "spam": "Indésirables",
     "archive": "Archives"
   },
-  "search": {
-    "indexUnavailable": "État de l’indexation indisponible",
-    "indexProgress": "En-têtes : {{headers}} · Corps recherchables : {{bodies}}/{{headers}}",
-    "indexRetrying": "Nouvelles tentatives : {{count}}",
-    "indexSettingsTitle": "Indexation de la recherche",
-    "indexScope": "La couverture concerne les en-têtes déjà synchronisés. Les corps en attente sont indexés automatiquement avec de nouvelles tentatives.",
-    "indexPending": "En attente : {{count}}",
-    "indexRefresh": "Actualiser le statut"
-  },
+  "search": {},
   "searchIndex": {
     "title": "Recherche et indexation",
     "description": "La recherche intégrale couvre les messages dont les en-têtes sont chargés. La couverture augmente lorsque l’indexation en arrière-plan télécharge le texte manquant.",

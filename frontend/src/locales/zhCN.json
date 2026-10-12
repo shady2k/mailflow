@@ -1906,15 +1906,7 @@
     "spam": "垃圾邮件",
     "archive": "归档"
   },
-  "search": {
-    "indexUnavailable": "搜索索引状态不可用",
-    "indexProgress": "邮件头：{{headers}} · 可搜索正文：{{bodies}}/{{headers}}",
-    "indexRetrying": "重试中：{{count}}",
-    "indexSettingsTitle": "搜索索引",
-    "indexScope": "覆盖范围包含已同步的邮件头。待处理的正文会自动建立索引，并在出错时重试。",
-    "indexPending": "待处理：{{count}}",
-    "indexRefresh": "刷新状态"
-  },
+  "search": {},
   "searchIndex": {
     "title": "搜索与索引",
     "description": "全文搜索涵盖已加载邮件头的邮件。后台索引下载缺失的正文后，搜索范围会扩大。",

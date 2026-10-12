@@ -1906,15 +1906,7 @@
     "spam": "Spam",
     "archive": "Archiv"
   },
-  "search": {
-    "indexUnavailable": "Status der Suchindexierung nicht verfügbar",
-    "indexProgress": "Kopfzeilen: {{headers}} · Durchsuchbare Inhalte: {{bodies}}/{{headers}}",
-    "indexRetrying": "Erneute Versuche: {{count}}",
-    "indexSettingsTitle": "Suchindexierung",
-    "indexScope": "Die Abdeckung umfasst bereits synchronisierte Kopfzeilen. Ausstehende Nachrichtentexte werden automatisch mit Wiederholungen indexiert.",
-    "indexPending": "Ausstehend: {{count}}",
-    "indexRefresh": "Status aktualisieren"
-  },
+  "search": {},
   "searchIndex": {
     "title": "Suche und Indizierung",
     "description": "Die Volltextsuche umfasst Nachrichten mit geladenen Kopfzeilen. Die Abdeckung wächst, während die Hintergrundindizierung fehlenden Text herunterlädt.",

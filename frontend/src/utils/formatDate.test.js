@@ -1,4 +1,5 @@
 import test from 'node:test';
+import process from 'node:process';
 import assert from 'node:assert/strict';
 import i18n from 'i18next';
 import { formatDate, formatDateTime, formatTime, formatTimestamp, formatCalendarDate } from './formatDate.js';

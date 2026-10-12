@@ -1906,15 +1906,7 @@
     "spam": "Spam",
     "archive": "Archivo"
   },
-  "search": {
-    "indexUnavailable": "Estado de indexación no disponible",
-    "indexProgress": "Cabeceras: {{headers}} · Cuerpos buscables: {{bodies}}/{{headers}}",
-    "indexRetrying": "Reintentos: {{count}}",
-    "indexSettingsTitle": "Indexación de búsqueda",
-    "indexScope": "La cobertura incluye las cabeceras ya sincronizadas. Los cuerpos pendientes se indexan automáticamente con reintentos.",
-    "indexPending": "Pendientes: {{count}}",
-    "indexRefresh": "Actualizar estado"
-  },
+  "search": {},
   "searchIndex": {
     "title": "Búsqueda e indexación",
     "description": "La búsqueda de texto completo abarca los mensajes cuyas cabeceras se han cargado. La cobertura aumenta al descargar el texto que falta en segundo plano.",

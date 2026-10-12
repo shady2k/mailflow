@@ -1,5 +1,4 @@
 import AiHeadersEditor from './AiHeadersEditor.jsx';
-import BodyIndexStatus from './BodyIndexStatus.jsx';
 import { formatCalendarDate, formatTimestamp, formatTime } from '../utils/formatDate.js';
 import { useCallback, useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -555,7 +554,6 @@ function AccountForm({ initial, onSave, onCancel }) {
         </>
       )}
 
-      {isEdit && form.protocol === 'imap' && <BodyIndexStatus accountId={initial.id} detailed />}
 
       {error && (
         <div style={{
@@ -1093,7 +1091,6 @@ function AccountsTab() {
         </button>
       </div>
 
-      <BodyIndexStatus accountId={null} detailed />
 
       {accounts.length === 0 && (
         <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-tertiary)', fontSize: 14 }}>
