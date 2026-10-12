@@ -344,7 +344,6 @@
     "compose": "Composer",
     "messagesPerPage": "Messages par page",
     "selectAll": "Tout sélectionner",
-    "deselectAll": "Tout désélectionner",
     "starSelected": "Étoiler",
     "unstarSelected": "Retirer l'étoile",
     "markReadSelected": "Marquer comme lu",
