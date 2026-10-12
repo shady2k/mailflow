@@ -49,7 +49,7 @@ registerHooks({
 const dom = new JSDOM('<div id="root"></div>', { url: 'https://mail.example.invalid', pretendToBeVisual: true });
 Object.assign(globalThis, {
   window: dom.window, document: dom.window.document,
-  localStorage: dom.window.localStorage, CustomEvent: dom.window.CustomEvent,
+  localStorage: dom.window.localStorage, CustomEvent: dom.window.CustomEvent, Event: dom.window.Event,
   Node: dom.window.Node, Element: dom.window.Element, HTMLElement: dom.window.HTMLElement,
   getComputedStyle: dom.window.getComputedStyle,
   ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
@@ -648,4 +648,67 @@ test('category pills show only total, hide zero, and use unread for emphasis and
     assert.equal(categoryButton('automated').getAttribute('aria-pressed'),'true');
     await React.act(async () => root.unmount());root=null;
   }
+});
+
+const deleteGuards = await import('../utils/pendingDeletes.js');
+function captureUndoCommits() {
+  const original=globalThis.setTimeout;const callbacks=[];
+  globalThis.setTimeout=(fn,delay,...args)=>delay===4750?(callbacks.push(fn),{synthetic:true}):original(fn,delay,...args);
+  return {callbacks,restore:()=>{globalThis.setTimeout=original;}};
+}
+test('single archive decrements category immediately during undo delay and undo restores exact total/unread', async () => {
+  await mountCategories({rows:[MESSAGE],counts:{primary:1},totals:{primary:1}});
+  await React.act(async()=>useStore.getState().setSelectedMessage(MESSAGE.id));
+  const clock=captureUndoCommits();let archiveCalls=0;api.bulkArchive=async()=>{archiveCalls++;return {archived:[MESSAGE.id]};};
+  try {
+    await React.act(async()=>shortcutBus.emit('archive'));
+    assert.equal(useStore.getState().messages.length,0);
+    assert.equal(useStore.getState().categoryTotals.primary,0);
+    assert.equal(useStore.getState().categoryCounts.primary,0);
+    assert.equal(archiveCalls,0);
+    await React.act(async()=>{window.dispatchEvent(new CustomEvent('mailflow:refresh'));await new Promise(r=>setTimeout(r,90));});
+    assert.equal(useStore.getState().categoryTotals.primary,0,'pre-commit server snapshot must not resurrect the count');
+    const toast=useStore.getState().notifications.filter(n=>n.onUndo).at(-1);
+    await React.act(async()=>toast.onUndo());
+    assert.equal(useStore.getState().categoryTotals.primary,1);
+    assert.equal(useStore.getState().categoryCounts.primary,1);
+    assert.equal(useStore.getState().messages.length,1);
+    await React.act(async()=>clock.callbacks[0]());assert.equal(archiveCalls,0);
+  } finally {clock.restore();deleteGuards.clearDeleteGuard(MESSAGE.id);await React.act(async()=>root.unmount());root=null;}
+});
+test('bulk archive reconciles partial failure without double decrement or a stale response overwrite', async () => {
+  const second={...MESSAGE,id:'synthetic-second',uid:2,message_id:'<second@example.invalid>',is_read:true};
+  await mountCategories({rows:[MESSAGE,second],counts:{primary:1},totals:{primary:2}});
+  await React.act(async()=>useStore.getState().setSelectedMessage(MESSAGE.id));
+  await React.act(async()=>shortcutBus.emit('selectMessage'));
+  const select=container.querySelector('[title="messageList.selectAll"]');
+  assert.ok(select);
+  await React.act(async()=>select.click());
+  const clock=captureUndoCommits();let resolveArchive;api.bulkArchive=()=>new Promise(resolve=>{resolveArchive=resolve;});
+  try {
+    const archive=container.querySelector('[title="messageList.archiveSelected"]');assert.ok(archive);
+    await React.act(async()=>archive.click());
+    assert.equal(useStore.getState().categoryTotals.primary,0);
+    assert.equal(useStore.getState().categoryCounts.primary,0);
+    let commit;
+    await React.act(async()=>{commit=clock.callbacks[0]();await new Promise(r=>setTimeout(r,0));});
+    assert.equal(useStore.getState().categoryTotals.primary,0);
+    await React.act(async()=>{resolveArchive({archived:[MESSAGE.id],noArchiveFolder:[]});await commit;});
+    assert.equal(useStore.getState().categoryTotals.primary,1);
+    assert.equal(useStore.getState().categoryCounts.primary,0);
+    assert.deepEqual(useStore.getState().messages.map(m=>m.id),[second.id]);
+    assert.deepEqual(useStore.getState().categoryPendingRemovals,{});
+  } finally {clock.restore();[MESSAGE.id,second.id].forEach(id=>deleteGuards.clearDeleteGuard(id));await React.act(async()=>root.unmount());root=null;}
+});
+test('pending removals are scoped and an old response cannot reverse an archive or undo', async () => {
+  await mountCategories({rows:[MESSAGE],counts:{primary:1},totals:{primary:3}});
+  let reply;api.getCategoryCounts=()=>new Promise(resolve=>{reply=resolve;});
+  await React.act(async()=>{window.dispatchEvent(new CustomEvent('mailflow:refresh'));await new Promise(r=>setTimeout(r,90));});
+  await React.act(async()=>{deleteGuards.setPendingDelete(MESSAGE.id);useStore.getState().removeMessage(MESSAGE.id);});
+  assert.equal(useStore.getState().categoryTotals.primary,2);
+  await React.act(async()=>reply({counts:{primary:1},totals:{primary:3}}));
+  assert.equal(useStore.getState().categoryTotals.primary,2);
+  await React.act(async()=>deleteGuards.clearDeleteGuard(MESSAGE.id));
+  assert.equal(useStore.getState().categoryTotals.primary,3);
+  await React.act(async()=>root.unmount());root=null;
 });

@@ -1,3 +1,4 @@
+import { categoryRequestState, hasPendingCategoryRemoval } from '../utils/categoryMutations.js';
 import { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore, selectSelectedMessageMid, selectSelectedMessageAccountId } from '../store/index.js';
@@ -319,11 +320,12 @@ export default function MessageList() {
     const load = async () => {
       const current = ++sequence;
       const revision = useStore.getState().categoryCountRevision;
+      const requests = categoryRequestState();
       try {
         const data = await api.getCategoryCounts(params);
-        if (!cancelled && current === sequence && revision === useStore.getState().categoryCountRevision) setCategoryCounts(data.counts || {}, data.totals ?? null, scope);
+        if (!cancelled && current === sequence && revision === useStore.getState().categoryCountRevision && requests.version === categoryRequestState().version && categoryRequestState().pending === 0 && !hasPendingCategoryRemoval(useStore.getState())) setCategoryCounts(data.counts || {}, data.totals ?? null, scope);
       } catch {
-        if (!cancelled && current === sequence && revision === useStore.getState().categoryCountRevision) setCategoryCounts({});
+        if (!cancelled && current === sequence && revision === useStore.getState().categoryCountRevision && requests.version === categoryRequestState().version && categoryRequestState().pending === 0 && !hasPendingCategoryRemoval(useStore.getState())) setCategoryCounts({});
       }
     };
     const refresh = () => {
@@ -1041,6 +1043,7 @@ export default function MessageList() {
 
   // Undo-able delete: optimistically remove, delay the API call by 4.5s so user can undo
   const scheduleDelete = useCallback(async (message) => {
+    const viewKey = archiveViewKeyRef.current;
     const tid = message.thread_id || message.id;
     const isThreadRow = isThreadListRow(message);
     const key = isThreadRow ? `thread:${tid}` : message.id;
@@ -1059,6 +1062,7 @@ export default function MessageList() {
     const ids = [...new Set(deleteMessages.map(msg => msg.id).filter(Boolean))];
     const visibleMessage = message;
     ids.forEach((id) => setPendingDelete(id));
+    useStore.getState().stageCategoryRemovals(deleteMessages);
 
     // Open what takes its place (the afterRemove setting) before removing this one.
     advanceSelectionAfterRemoval(visibleMessage.id);
@@ -1083,7 +1087,7 @@ export default function MessageList() {
           if (failedIds.length > 0) {
             const idToMsg = new Map(deleteMessages.map(m => [m.id, m]));
             const failedUnreadDelta = failedIds.filter(id => idToMsg.has(id) && !idToMsg.get(id).is_read).length;
-            useStore.getState().restoreMessages([visibleMessage]);
+            restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, [visibleMessage]);
             if (failedUnreadDelta > 0) incrementUnread(message.account_id, failedUnreadDelta);
             addNotification({
               type: 'error',
@@ -1097,7 +1101,7 @@ export default function MessageList() {
         }
       } catch {
         ids.forEach((id) => clearDeleteGuard(id));
-        useStore.getState().restoreMessages([visibleMessage]);
+        restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, [visibleMessage]);
         if (unreadDelta > 0) incrementUnread(message.account_id, unreadDelta);
         addNotification({
           type: 'error',
@@ -1116,7 +1120,7 @@ export default function MessageList() {
         clearTimeout(pending.timer);
         pendingDeleteTimers.current.delete(key);
         ids.forEach((id) => clearPendingDelete(id));
-        useStore.getState().restoreMessages([visibleMessage]);
+        restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, [visibleMessage]);
         if (unreadDelta > 0) incrementUnread(message.account_id, unreadDelta);
       },
     });
@@ -1308,7 +1312,7 @@ export default function MessageList() {
     const archiveAction = createUndoableCommit({
       delayMs: UNDO_COMMIT_DELAY_MS,
       commit: async () => {
-        guards.forEach(clearDeleteGuard);
+        guards.forEach(id => clearDeleteGuard(id, true));
         await archiveMessage(message, { alreadyRemoved: true, viewKey });
       },
       undo: () => {
@@ -1551,20 +1555,24 @@ export default function MessageList() {
   }, [displayMessages]);
 
   const handleBulkDelete = useCallback(async (ids, msgs) => {
+    const viewKey = archiveViewKeyRef.current;
     const key = `bulk:${ids[0]}`;
     // Selected thread rows delete the whole conversation, matching the
     // single-row delete path — without this only each thread's visible
     // (newest) message was deleted and the rest of the thread survived.
     let deleteIds = ids;
+    let deleteTargets = msgs;
     try {
       const resolved = await Promise.all(msgs.map(async m => keepDraftsApart(await resolveMessagesForThreadAction(m), m.id)));
-      deleteIds = [...new Set([...ids, ...resolved.flat().map(m => m?.id).filter(Boolean)])];
+      deleteTargets = resolved.flat();
+      deleteIds = [...new Set([...ids, ...deleteTargets.map(m => m?.id).filter(Boolean)])];
     } catch (err) {
       console.error('Failed to load thread for bulk delete:', err.message);
     }
     const searchOffsetBeforeRemoval = searchFetchedOffsetRef.current;
     const shouldPrefetchSearch = Boolean(useStore.getState().searchQuery.trim() && searchHasMore);
     deleteIds.forEach(id => setPendingDelete(id));
+    useStore.getState().stageCategoryRemovals(deleteTargets);
     ids.forEach(id => removeMessage(id));
     if (shouldPrefetchSearch) {
       prefetchSearchAfterRemoval(searchOffsetBeforeRemoval);
@@ -1595,7 +1603,7 @@ export default function MessageList() {
       if (failedIds.length > 0) {
         const failedSet = new Set(failedIds);
         const failedMsgs = msgs.filter(msg => failedSet.has(msg.id));
-        useStore.getState().restoreMessages(failedMsgs);
+        restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, failedMsgs);
         failedMsgs.forEach(msg => {
           const delta = parseInt(msg.unread_count) || (msg.is_read ? 0 : 1);
           if (delta > 0) incrementUnread(msg.account_id, delta);
@@ -1615,7 +1623,7 @@ export default function MessageList() {
         clearTimeout(timer);
         pendingDeleteTimers.current.delete(key);
         deleteIds.forEach(id => clearPendingDelete(id));
-        useStore.getState().restoreMessages(msgs);
+        restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, msgs);
         msgs.forEach(msg => {
           const delta = parseInt(msg.unread_count) || (msg.is_read ? 0 : 1);
           if (delta > 0) incrementUnread(msg.account_id, delta);
@@ -1625,20 +1633,28 @@ export default function MessageList() {
   }, [searchHasMore, removeMessage, prefetchSearchAfterRemoval, resolveMessagesForThreadAction, decrementUnread, incrementUnread, addNotification, t]);
 
   const handleBulkMove = useCallback(async (ids, msgs, folder) => {
+    const viewKey = archiveViewKeyRef.current;
+    msgs = msgs.filter(message => message.folder !== folder);
+    ids = ids.filter(id => msgs.some(message => message.id === id));
+    if (!ids.length) return;
     // Selected thread rows move the whole conversation. A folder path is
     // account-specific, so scope each thread's expansion to its row's own
     // account — the server would just skip (and previously silently drop)
     // another account's copies from a folder that doesn't exist there.
     let moveIds = ids;
+    let moveTargets = msgs;
     try {
       const resolved = await Promise.all(msgs.map(async (m) => {
         const thread = keepDraftsApart(await resolveMessagesForThreadAction(m), m.id);
         return thread.filter(tm => tm?.account_id === m.account_id);
       }));
-      moveIds = [...new Set([...ids, ...resolved.flat().map(m => m?.id).filter(Boolean)])];
+      moveTargets = resolved.flat();
+      moveIds = [...new Set([...ids, ...moveTargets.map(m => m?.id).filter(Boolean)])];
     } catch (err) {
       console.error('Failed to load thread for bulk move:', err.message);
     }
+    moveIds.forEach(setPendingDelete);
+    useStore.getState().stageCategoryRemovals(folder === 'INBOX' ? [] : moveTargets);
     ids.forEach(id => removeMessage(id));
     msgs.forEach(msg => { if (!msg.is_read) decrementUnread(msg.account_id); });
     setSelectedIds(new Set());
@@ -1650,17 +1666,19 @@ export default function MessageList() {
       try {
         const result = await api.bulkMove(moveIds, folder);
         const movedSet = new Set(result.moved ?? []);
+        moveIds.forEach(id => movedSet.has(id) ? setCompletedDelete(id) : clearDeleteGuard(id));
         const failedCount = moveIds.filter(id => !movedSet.has(id)).length;
         if (failedCount > 0) {
           const failedMsgs = msgs.filter(msg => !movedSet.has(msg.id));
-          if (failedMsgs.length > 0) useStore.getState().restoreMessages(failedMsgs);
+          if (failedMsgs.length > 0) restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, failedMsgs);
           addNotification({ title: t('messageList.bulkMoved.failTitle'), body: t('messageList.bulkMoved.failBody', { count: failedCount }) });
         } else if (msgs[0]?.account_id) {
           useStore.getState().recordRecentFolder({ accountId: msgs[0].account_id, path: folder });
         }
       } catch (err) {
+        moveIds.forEach(id => clearDeleteGuard(id));
         console.error('Bulk move failed:', err);
-        useStore.getState().restoreMessages(msgs);
+        restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, msgs);
         addNotification({ title: t('messageList.bulkMoved.failTitle'), body: t('messageList.bulkMoved.failBody', { count: moveIds.length }) });
       }
     }, 4500);
@@ -1670,7 +1688,8 @@ export default function MessageList() {
       onUndo: () => {
         undone = true;
         clearTimeout(timer);
-        useStore.getState().restoreMessages(msgs);
+        moveIds.forEach(id => clearDeleteGuard(id));
+        restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, msgs);
         msgs.forEach(msg => { if (!msg.is_read) incrementUnread(msg.account_id); });
       },
     });
@@ -1754,6 +1773,7 @@ export default function MessageList() {
           const archiveIds = targets.map(target => target.id);
           archiveIds.forEach(setPendingDelete);
 
+          useStore.getState().stageCategoryRemovals(targets);
           const resolvedUnreadByAccount = unreadCountsByAccount(targets);
           const accountIds = new Set([...unreadByAccount.keys(), ...resolvedUnreadByAccount.keys()]);
           accountIds.forEach((accountId) => {
@@ -1855,6 +1875,7 @@ export default function MessageList() {
       const resolved = await resolveMessagesForThreadAction(message);
       targets = archiveTargetsForFolder(message, resolved, activeFolder, threadRow, selectedAccountId);
 
+      useStore.getState().stageCategoryRemovals(targets);
       const resolvedUnreadByAccount = unreadCountsByAccount(targets);
       const accounts = new Set([...unreadByAccount.keys(), ...resolvedUnreadByAccount.keys()]);
       accounts.forEach((accountId) => {
@@ -2312,7 +2333,7 @@ export default function MessageList() {
         const archiveAction = createUndoableCommit({
           delayMs: UNDO_COMMIT_DELAY_MS,
           commit: async () => {
-            guards.forEach(clearDeleteGuard);
+            guards.forEach(id => clearDeleteGuard(id, true));
             await archiveMessage(archived, { alreadyRemoved: true, viewKey });
           },
           undo: () => {
@@ -2340,6 +2361,7 @@ export default function MessageList() {
           break;
         }
         const moved = message;
+        if (moved.folder === folder) break;
         let moveMessages;
         try {
           moveMessages = keepDraftsApart(await resolveMessagesForThreadAction(message), message.id);
@@ -2355,6 +2377,8 @@ export default function MessageList() {
         moveMessages = moveMessages.filter(msg => msg?.account_id === moved.account_id);
         const moveIds = [...new Set(moveMessages.map(msg => msg.id).filter(Boolean))];
         if (!moveIds.length) moveIds.push(moved.id);
+        moveIds.forEach(setPendingDelete);
+        useStore.getState().stageCategoryRemovals(moveMessages);
         removeMessage(moved.id);
         if (!moved.is_read) decrementUnread(moved.account_id);
         // Remove the moved message from the selection so the action bar doesn't
@@ -2374,6 +2398,7 @@ export default function MessageList() {
             // moves fail or are skipped) — surface partial failures instead of
             // letting the thread silently reappear on the next sync.
             const movedSet = new Set(result.moved ?? []);
+            moveIds.forEach(id => movedSet.has(id) ? setCompletedDelete(id) : clearDeleteGuard(id));
             const failedCount = moveIds.filter(id => !movedSet.has(id)).length;
             if (failedCount > 0) {
               if (!movedSet.has(moved.id)) {
@@ -2385,6 +2410,7 @@ export default function MessageList() {
               useStore.getState().recordRecentFolder({ accountId: moved.account_id, path: folder });
             }
           } catch (err) {
+            moveIds.forEach(id => clearDeleteGuard(id));
             console.error('Move failed:', err.message);
             useStore.getState().restoreMessages([moved]);
             if (!moved.is_read) incrementUnread(moved.account_id);
@@ -2397,6 +2423,7 @@ export default function MessageList() {
           onUndo: () => {
             moveUndone = true;
             clearTimeout(moveTimer);
+            moveIds.forEach(id => clearDeleteGuard(id));
             useStore.getState().restoreMessages([moved]);
             if (!moved.is_read) incrementUnread(moved.account_id);
           },

@@ -64,27 +64,44 @@ export function runThreadAction({ messages, commit, resolve, notification, addNo
 
   const unread = targets.filter(message => !message.is_read);
   const store = useStore.getState();
+  const view = [store.user?.id, store.selectedAccountId, store.selectedFolder, store.searchQuery];
+  targets.forEach(message => setPendingDelete(message.id));
+  store.stageCategoryRemovals(targets);
   targets.forEach(message => store.removeMessage(message.id));
   unread.forEach(message => store.decrementUnread(message.account_id));
   onRemove?.(targets);
 
-  const restore = () => {
+  const restore = (failed = targets) => {
     const state = useStore.getState();
-    state.restoreMessages(targets);
-    unread.forEach(message => state.incrementUnread(message.account_id));
-    onRestore?.(targets);
+    failed.forEach(message => clearDeleteGuard(message.id));
+    if (JSON.stringify([state.user?.id, state.selectedAccountId, state.selectedFolder, state.searchQuery]) === JSON.stringify(view)) state.restoreMessages(failed);
+    if (state.user?.id === view[0]) failed.filter(message => !message.is_read).forEach(message => state.incrementUnread(message.account_id));
+    onRestore?.(failed);
   };
 
   let undone = false;
+  let attempted = targets;
   const timer = setTimeout(async () => {
     if (undone) return;
     try {
       // Resolve last, so a message that arrived during the undo window is included.
       const live = resolve ? normalizeConversation(await resolve(targets)) : targets;
-      await commit(live.length ? live : targets);
+      const resolved = live.length ? live : targets;
+      attempted = [...new Map([...targets, ...resolved].map(message => [message.id, message])).values()];
+      resolved.forEach(message => setPendingDelete(message.id));
+      useStore.getState().stageCategoryRemovals(resolved);
+      const result = await commit(resolved);
+      const successful = new Set(result?.archived ?? result?.deleted ?? result?.moved ?? resolved.map(message => message.id));
+      const tracked = [...new Map([...targets, ...resolved].map(message => [message.id, message])).values()];
+      tracked.forEach(message => successful.has(message.id) ? setCompletedDelete(message.id) : clearDeleteGuard(message.id));
+      const failed = tracked.filter(message => !successful.has(message.id));
+      if (failed.length) {
+        restore(failed);
+        addNotification({ type: 'error', title: notification.failTitle, body: notification.failBody });
+      }
     } catch (err) {
       console.error('Thread action failed:', err);
-      restore();
+      restore(attempted);
       addNotification({
         type: 'error',
         title: notification.failTitle,
@@ -147,6 +164,7 @@ export function archiveThread(messages, { t, addNotification, fetchThread, ancho
       if (result?.noArchiveFolder?.length) {
         addNotification({ title: t('message.archived.noFolderTitle'), body: t('message.archived.noFolderBody') });
       }
+      return result;
     },
     notification: {
       title: t('message.archived.conversationTitle'),
@@ -167,8 +185,7 @@ export function deleteThread(messages, { t, addNotification, fetchThread, anchor
     onRemove: targets => targets.forEach(message => setPendingDelete(message.id)),
     onRestore: targets => targets.forEach(message => { clearPendingDelete(message.id); clearDeleteGuard(message.id); }),
     commit: async (targets) => {
-      await api.bulkDelete(conversationActionIds(targets));
-      targets.forEach(message => setCompletedDelete(message.id));
+      return api.bulkDelete(conversationActionIds(targets));
     },
     notification: {
       title: t('messageList.deleted.conversationTitle'),
@@ -185,7 +202,7 @@ export function moveThread(messages, folder, { t, addNotification, fetchThread, 
     addNotification,
     resolve: sparingDrafts(liveThread(fetchThread), anchorId),
     commit: async (targets) => {
-      await api.bulkMove(conversationActionIds(targets), folder);
+      const result = await api.bulkMove(conversationActionIds(targets), folder);
       // Recorded per account, since a thread can span several.
       const seen = new Set();
       targets.forEach(message => {
@@ -193,6 +210,7 @@ export function moveThread(messages, folder, { t, addNotification, fetchThread, 
         seen.add(message.account_id);
         useStore.getState().recordRecentFolder({ accountId: message.account_id, path: folder });
       });
+      return result;
     },
     notification: {
       title: t('message.moved.conversationTitle'),

@@ -1,3 +1,4 @@
+import { beginCategoryRequest } from './categoryMutations.js';
 const BASE = '/api';
 
 // Sent on every /api request so the backend CSRF guard accepts it. A cross-site
@@ -18,24 +19,28 @@ async function request(method, path, body, extraHeaders) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
   }
-  const res = await fetch(BASE + path, opts);
-  if (!res.ok) {
-    if (res.status === 423) {
-      // Server-enforced screen lock (#235) — surface the lock overlay from any call.
-      window.dispatchEvent(new CustomEvent('mailflow:locked'));
+  const affectsCounts = method !== 'GET' && (path.startsWith('/mail/') || path.startsWith('/rules/') || path.startsWith('/categories/'));
+  const finish = affectsCounts ? beginCategoryRequest() : () => {};
+  try {
+    const res = await fetch(BASE + path, opts);
+    if (!res.ok) {
+      if (res.status === 423) {
+        // Server-enforced screen lock (#235) — surface the lock overlay from any call.
+        window.dispatchEvent(new CustomEvent('mailflow:locked'));
+      }
+      if (res.status === 401 && !path.startsWith('/auth/')) {
+        window.dispatchEvent(new CustomEvent('mailflow:session_expired'));
+      }
+      const err = await res.json().catch(() => ({ error: 'Request failed' }));
+      // The status rides along so a caller can tell a refusal (409) from a failure.
+      throw Object.assign(new Error(err.error || 'Request failed'), { status: res.status });
     }
-    if (res.status === 401 && !path.startsWith('/auth/')) {
-      window.dispatchEvent(new CustomEvent('mailflow:session_expired'));
-    }
-    const err = await res.json().catch(() => ({ error: 'Request failed' }));
-    // The status rides along so a caller can tell a refusal (409) from a failure.
-    throw Object.assign(new Error(err.error || 'Request failed'), { status: res.status });
+    const data = await res.json();
+    return data;
+  } finally {
+    finish();
+    if (affectsCounts && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('mailflow:category-counts-refresh'));
   }
-  const data = await res.json();
-  if (typeof window !== 'undefined' && method !== 'GET' && (path.startsWith('/mail/') || path.startsWith('/rules/') || path.startsWith('/categories/'))) {
-    window.dispatchEvent(new CustomEvent('mailflow:category-counts-refresh'));
-  }
-  return data;
 }
 
 export async function streamAiChat(messages, { signal, onDelta } = {}) {

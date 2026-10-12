@@ -1037,6 +1037,9 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
     if (!message) return;
     setShowMovePicker(false);
     const moved = message;
+    if (moved.folder === folder) return;
+    setPendingDelete(moved.id);
+    useStore.getState().stageCategoryRemovals([moved]);
     advanceSelectionAfterRemoval(moved.id);
     removeMessage(moved.id);
     closeWindowIfWindowed();
@@ -1045,9 +1048,12 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
     const timer = setTimeout(async () => {
       if (undone) return;
       try {
-        await api.bulkMove([moved.id], folder);
+        const result = await api.bulkMove([moved.id], folder);
+        if (!result.moved?.includes(moved.id)) throw new Error(t('message.moved.failBody'));
+        setCompletedDelete(moved.id);
         useStore.getState().recordRecentFolder({ accountId: moved.account_id, path: folder });
       } catch (err) {
+        clearDeleteGuard(moved.id);
         console.error('Move failed:', err);
         useStore.getState().restoreMessages([moved]);
         if (!moved.is_read) incrementUnread(moved.account_id);
@@ -1060,6 +1066,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
       onUndo: () => {
         undone = true;
         clearTimeout(timer);
+        clearDeleteGuard(moved.id);
         useStore.getState().restoreMessages([moved]);
         if (!moved.is_read) incrementUnread(moved.account_id);
       },
@@ -1185,6 +1192,8 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
 
   const handleArchive = () => {
     const archived = message;
+    setPendingDelete(archived.id);
+    useStore.getState().stageCategoryRemovals([archived]);
     advanceSelectionAfterRemoval(archived.id);
     removeMessage(archived.id);
     closeWindowIfWindowed();
@@ -1194,10 +1203,19 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
       if (undone) return;
       try {
         const result = await api.bulkArchive([archived.id]);
+        if (result.archived?.includes(archived.id)) setCompletedDelete(archived.id);
+        else {
+          clearDeleteGuard(archived.id);
+          useStore.getState().restoreMessages([archived]);
+          if (!archived.is_read) incrementUnread(archived.account_id);
+        }
         if (result.noArchiveFolder?.length) {
           addNotification({ title: t('message.archived.noFolderTitle'), body: t('message.archived.noFolderBody') });
         }
       } catch (err) {
+        clearDeleteGuard(archived.id);
+        useStore.getState().restoreMessages([archived]);
+        if (!archived.is_read) incrementUnread(archived.account_id);
         console.error('Archive failed:', err);
         addNotification({ title: t('message.archived.failTitle'), body: t('message.archived.failBody') });
       }
@@ -1208,6 +1226,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
       onUndo: () => {
         undone = true;
         clearTimeout(timer);
+        clearDeleteGuard(archived.id);
         const state = useStore.getState();
         state.setMessages([...state.messages, archived].sort((a, b) => new Date(b.date) - new Date(a.date)));
         if (!archived.is_read) incrementUnread(archived.account_id);

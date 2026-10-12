@@ -2,6 +2,8 @@
 // but not yet committed to the server because the Undo toast is still active.
 export const pendingDeleteMap = new Map();
 export const completedDeleteMap = new Map();
+let onSettled = () => {};
+export function observeDeleteSettlements(listener) { onSettled = listener; }
 
 function setExpiring(map, messageId, ttlMs) {
   const existing = map.get(messageId);
@@ -15,14 +17,15 @@ export function setPendingDelete(messageId) {
   setExpiring(pendingDeleteMap, messageId, 30000);
 }
 
-export function clearPendingDelete(messageId) {
+export function clearPendingDelete(messageId, committed = false, preserveMutation = false) {
   const existing = pendingDeleteMap.get(messageId);
   if (existing?.timer) clearTimeout(existing.timer);
   pendingDeleteMap.delete(messageId);
+  if (preserveMutation !== true) onSettled(messageId, committed === true);
 }
 
 export function setCompletedDelete(messageId) {
-  clearPendingDelete(messageId);
+  clearPendingDelete(messageId, true);
   setExpiring(completedDeleteMap, messageId, 10000);
 }
 
@@ -32,8 +35,8 @@ export function clearCompletedDelete(messageId) {
   completedDeleteMap.delete(messageId);
 }
 
-export function clearDeleteGuard(messageId) {
-  clearPendingDelete(messageId);
+export function clearDeleteGuard(messageId, preserveMutation = false) {
+  clearPendingDelete(messageId, false, preserveMutation);
   clearCompletedDelete(messageId);
 }
 

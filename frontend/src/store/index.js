@@ -1,3 +1,5 @@
+import { pendingDeleteMap, observeDeleteSettlements } from '../utils/pendingDeletes.js';
+import { stageCategoryRemovals, settleCategoryRemoval } from '../utils/categoryMutations.js';
 import { isAccountInUnifiedInbox } from '../utils/unifiedInbox.js';
 import { create } from 'zustand';
 import { resolveConversationMode, groupsMessageList, conversationModeTransition, isConversationMode } from '../utils/conversationMode.js';
@@ -144,7 +146,7 @@ export const useStore = create((set, get) => ({
         threadMessages: {}, expandedThreadId: null,
         accounts: [], accountsReady: false, folders: {},
         notifications: [], backfillProgress: {},
-        gtdSections: null, categoryCounts: {}, categoryTotals: null, categoryCountScope: null, activeGtdTab: null,
+        gtdSections: null, categoryCounts: {}, categoryTotals: null, categoryCountScope: null, categoryPendingRemovals: {}, activeGtdTab: null,
         // Reply-draft lookups and handoffs still in flight stop on the user id, so the
         // revision need not move.
         replyDrafts: {},
@@ -201,7 +203,7 @@ export const useStore = create((set, get) => ({
         unreadCounts: { total: 0, byAccount: {} },
         notifications: [], threadMessages: {}, expandedThreadId: null,
         backfillProgress: {},
-        gtdSections: null, categoryCounts: {}, categoryTotals: null, categoryCountScope: null, activeGtdTab: null,
+        gtdSections: null, categoryCounts: {}, categoryTotals: null, categoryCountScope: null, categoryPendingRemovals: {}, activeGtdTab: null,
       });
     } else {
       const restoredMessageId = localStorage.getItem('mailflow_locked_message') || null;
@@ -324,6 +326,7 @@ export const useStore = create((set, get) => ({
     return { messages, searchResults: state.searchResults.map(apply), threadMessages };
   }),
   removeMessage: (id) => set(state => ({
+    ...stageCategoryRemovals(state, [...state.messages, ...state.searchResults].filter(m => m.id === id && pendingDeleteMap.has(id) && !state.categoryPendingRemovals[id])),
     messages: state.messages.filter(m => m.id !== id),
     searchResults: state.searchResults.filter(m => m.id !== id),
     selectedMessageId: state.selectedMessageId === id ? null : state.selectedMessageId,
@@ -336,6 +339,7 @@ export const useStore = create((set, get) => ({
     const idSet = ids instanceof Set ? ids : new Set(ids);
     if (idSet.size === 0) return {};
     return {
+      ...stageCategoryRemovals(state, [...state.messages, ...state.searchResults].filter(m => idSet.has(m.id) && pendingDeleteMap.has(m.id) && !state.categoryPendingRemovals[m.id])),
       messages: state.messages.filter(m => !idSet.has(m.id)),
       searchResults: state.searchResults.filter(m => !idSet.has(m.id)),
       selectedMessageId: idSet.has(state.selectedMessageId) ? null : state.selectedMessageId,
@@ -853,10 +857,12 @@ export const useStore = create((set, get) => ({
   categoryTotals: null,
   categoryCountScope: null,
   categoryCountRevision: 0,
+  categoryPendingRemovals: {},
+  stageCategoryRemovals: (messages) => set(state => stageCategoryRemovals(state, messages)),
   setCategoryCounts: (counts, totals = null, scope = null) => set({ categoryCounts: counts, categoryTotals: totals, categoryCountScope: scope }),
   adjustCategoryCount: (category, delta, message) => set(state => {
     const scope = `${state.user?.id || ''}/${state.selectedAccountId || 'unified'}/${state.selectedFolder}`;
-    if (!message || message.folder !== 'INBOX' || message.message_count > 1 || state.categoryCountScope !== scope) return {};
+    if (!message || state.categoryPendingRemovals[message.id] || message.folder !== 'INBOX' || message.message_count > 1 || state.categoryCountScope !== scope) return {};
     const account = state.accounts.find(a => a.id === message.account_id);
     if (!account || (state.selectedAccountId ? message.account_id !== state.selectedAccountId : !isAccountInUnifiedInbox(account))) return {};
     const key = category || 'primary';
@@ -1406,3 +1412,9 @@ function findSelectedMessage(s) {
     ?? Object.values(s.threadMessages).flat().find(m => m.id === id)
     ?? null;
 }
+
+observeDeleteSettlements((id, committed) => {
+  if (!useStore.getState().categoryPendingRemovals[id]) return;
+  useStore.setState(state => settleCategoryRemoval(state, id, committed));
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('mailflow:category-counts-refresh'));
+});
