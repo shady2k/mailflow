@@ -1960,5 +1960,13 @@
     "resume": "Wznów indeksowanie",
     "retry": "Ponów nieudane pobrania",
     "saving": "Zapisywanie…"
+  },
+  "connection": {
+    "offline": "Brak sieci",
+    "unavailable": "Brak połączenia",
+    "connecting": "Łączenie…",
+    "refreshing": "Odświeżanie wiadomości…",
+    "refreshError": "Nie udało się odświeżyć wiadomości",
+    "blocked": "Połączenie odrzucone."
   }
 }

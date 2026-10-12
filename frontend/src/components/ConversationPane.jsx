@@ -1,3 +1,4 @@
+import ConnectionStatus from './ConnectionStatus.jsx';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../utils/api.js';
@@ -190,6 +191,7 @@ export default function ConversationPane({ threadId, folder, unified = false, se
   if (error) return (
     <div style={fill}>
       {mobileBackBar}
+      {isMobile && <ConnectionStatus />}
       <div style={{ padding: 16, color: 'var(--red, #e03131)' }}>{error}</div>
     </div>
   );
@@ -197,6 +199,7 @@ export default function ConversationPane({ threadId, folder, unified = false, se
     return (
       <div style={fill}>
         {mobileBackBar}
+      {isMobile && <ConnectionStatus />}
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
           <div className="skeleton-line" style={{ height: 13, width: '48%', borderRadius: 4 }} />
           <div className="skeleton-line" style={{ height: 13, width: '70%', borderRadius: 4 }} />
@@ -209,6 +212,7 @@ export default function ConversationPane({ threadId, folder, unified = false, se
   return (
     <div style={{ ...fill, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {mobileBackBar}
+      {isMobile && <ConnectionStatus />}
       <div
         // Remounts the stack when the thread's membership changes, so expansion state from a
         // previous conversation can never be applied to this one's message ids.

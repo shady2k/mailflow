@@ -1941,5 +1941,13 @@
     "resume": "恢复索引",
     "retry": "重试失败的下载",
     "saving": "正在保存…"
+  },
+  "connection": {
+    "offline": "离线",
+    "unavailable": "连接中断",
+    "connecting": "正在连接…",
+    "refreshing": "正在刷新邮件…",
+    "refreshError": "无法刷新邮件",
+    "blocked": "连接被拒绝。"
   }
 }

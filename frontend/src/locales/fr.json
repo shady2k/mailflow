@@ -1941,5 +1941,13 @@
     "resume": "Reprendre l’indexation",
     "retry": "Relancer les téléchargements échoués",
     "saving": "Enregistrement…"
+  },
+  "connection": {
+    "offline": "Hors ligne",
+    "unavailable": "Pas de connexion",
+    "connecting": "Connexion…",
+    "refreshing": "Actualisation des messages…",
+    "refreshError": "Échec de l’actualisation des messages",
+    "blocked": "Connexion refusée."
   }
 }

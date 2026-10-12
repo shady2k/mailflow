@@ -1,3 +1,5 @@
+import ConnectionStatus from './ConnectionStatus.jsx';
+import { registerConnectionRefresh } from '../utils/connectionRefresh.js';
 import { categoryRequestState, hasPendingCategoryRemoval } from '../utils/categoryMutations.js';
 import { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -311,21 +313,23 @@ export default function MessageList() {
   });
   useLayoutEffect(() => {
     setCategoryCounts({});
-    if (!categorizationActive || selectedFolder !== 'INBOX') return;
+    if (!categorizationActive || selectedFolder !== 'INBOX') return registerConnectionRefresh('categories', async () => true);
     let cancelled = false;
     let sequence = 0;
     let timer;
     const scope = `${user?.id || ''}/${selectedAccountId || 'unified'}/${selectedFolder}`;
     const params = selectedAccountId ? { accountId: selectedAccountId } : {};
-    const load = async () => {
+    const load = async (reconcile = false, isCurrent = () => true) => {
       const current = ++sequence;
       const revision = useStore.getState().categoryCountRevision;
       const requests = categoryRequestState();
       try {
         const data = await api.getCategoryCounts(params);
-        if (!cancelled && current === sequence && revision === useStore.getState().categoryCountRevision && requests.version === categoryRequestState().version && categoryRequestState().pending === 0 && !hasPendingCategoryRemoval(useStore.getState())) setCategoryCounts(data.counts || {}, data.totals ?? null, scope);
-      } catch {
-        if (!cancelled && current === sequence && revision === useStore.getState().categoryCountRevision && requests.version === categoryRequestState().version && categoryRequestState().pending === 0 && !hasPendingCategoryRemoval(useStore.getState())) setCategoryCounts({});
+        if (isCurrent() && !cancelled && current === sequence && revision === useStore.getState().categoryCountRevision && requests.version === categoryRequestState().version && categoryRequestState().pending === 0 && !hasPendingCategoryRemoval(useStore.getState())) { setCategoryCounts(data.counts || {}, data.totals ?? null, scope); return true; }
+        return false;
+      } catch (error) {
+        if (reconcile) throw error;
+        if (isCurrent() && !cancelled && current === sequence && revision === useStore.getState().categoryCountRevision && requests.version === categoryRequestState().version && categoryRequestState().pending === 0 && !hasPendingCategoryRemoval(useStore.getState())) setCategoryCounts({});
       }
     };
     const refresh = () => {
@@ -334,10 +338,12 @@ export default function MessageList() {
       timer = setTimeout(load, 75);
     };
     load();
+    const unregisterRefresh = registerConnectionRefresh('categories', current => load(true, current));
     window.addEventListener('mailflow:refresh', refresh);
     window.addEventListener('mailflow:category-counts-refresh', refresh);
     return () => {
       cancelled = true;
+      unregisterRefresh();
       clearTimeout(timer);
       window.removeEventListener('mailflow:refresh', refresh);
       window.removeEventListener('mailflow:category-counts-refresh', refresh);
@@ -530,8 +536,26 @@ export default function MessageList() {
   // Listen for background refresh events from WebSocket. If a message was just
   // opened, give its body request a brief head start before reloading the full list.
   useEffect(() => {
-    const run = async () => {
+    let cancelled = false;
+    const run = async (reconcile = false, isCurrent = () => true) => {
       try {
+        if (reconcile && searchQuery.trim()) {
+          clearTimeout(searchTimer.current);
+          const seq = ++searchSeq.current;
+          setSearchLoadingMore(false);
+          setIsSearching(true);
+          try {
+            const data = await api.search(searchQuery, selectedAccountId || undefined, { offset: 0, limit: searchPageSize, folder: searchFolder });
+            if (!isCurrent() || cancelled || seq !== searchSeq.current) return false;
+            searchFetchedOffsetRef.current = data.messages.length;
+            setSearchResults(applyReadGuard(data.messages));
+            setSearchHasMore(data.messages.length === searchPageSize);
+            setSearchError(null);
+            return true;
+          } finally {
+            if (seq === searchSeq.current) setIsSearching(false);
+          }
+        }
         const state = useStore.getState();
         const ps = state.pageSize;
         const sm = state.scrollMode;
@@ -548,9 +572,10 @@ export default function MessageList() {
         if (unreadOnly) params.unreadOnly = 'true';
         if (state.threadedView) params.threaded = 'true';
         if (selectedFolder === 'INBOX' && (categorizationEnabled || selectedAccount?.categorization_enabled)) params.category = activeCategory;
-        await refreshRequestRef.current.run(
+        const applied = await refreshRequestRef.current.run(
           () => api.getMessages(params),
           (data) => {
+            if (!isCurrent() || cancelled) return;
             setMessagesTotal(data.total);
             // If the unread filter is on and the currently open message was just marked
             // read, the server won't return it — preserve it so the user can keep reading.
@@ -569,7 +594,8 @@ export default function MessageList() {
             }
           },
         );
-      } catch { /* intentional */ }
+        return applied && isCurrent() && !cancelled;
+      } catch (error) { if (reconcile) throw error; }
     };
 
     const handler = () => {
@@ -583,12 +609,16 @@ export default function MessageList() {
         }
       }
     };
+    const unregisterRefresh = registerConnectionRefresh('messages', current => run(true, current));
     window.addEventListener('mailflow:refresh', handler);
     return () => {
+      cancelled = true;
+      refreshRequestRef.current.invalidate();
+      unregisterRefresh();
       window.removeEventListener('mailflow:refresh', handler);
       clearTimeout(deferredRefreshTimerRef.current);
     };
-  }, [selectedAccountId, selectedFolder, unreadOnly, activeCategory, searchQuery, categorizationEnabled, selectedAccount?.categorization_enabled, applyReadGuard, setHasMoreMessages, setMessages, setMessagesOffset, setMessagesTotal]);
+  }, [selectedAccountId, selectedFolder, unreadOnly, activeCategory, searchQuery, searchPageSize, searchFolder, unifiedInboxAccountKey, categorizationEnabled, selectedAccount?.categorization_enabled, applyReadGuard, setHasMoreMessages, setMessages, setMessagesOffset, setMessagesTotal, setIsSearching, setSearchResults]);
 
   // Search
   useLayoutEffect(() => {
@@ -3336,6 +3366,8 @@ export default function MessageList() {
           </div>
         </div>
       )}
+
+      <ConnectionStatus />
 
       {/* Category + GTD tabs — shown in INBOX when categorization and/or GTD is active */}
       {(categorizationActive || gtdActive) && selectedFolder === 'INBOX' && !searchQuery.trim() && (

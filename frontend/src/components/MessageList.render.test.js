@@ -712,3 +712,74 @@ test('pending removals are scoped and an old response cannot reverse an archive 
   assert.equal(useStore.getState().categoryTotals.primary,3);
   await React.act(async()=>root.unmount());root=null;
 });
+
+const { refreshConnectionData } = await import('../utils/connectionRefresh.js');
+test('connection reconciliation rejects late real list/category responses and refreshes current navigation scope', async () => {
+  await mountCategories({rows:[MESSAGE],counts:{primary:1},totals:{primary:1}});
+  const oldGet=api.getMessages, oldCategory=api.getCategoryCounts;
+  let resolveList, resolveCategory, current=true;
+  api.getMessages=()=>new Promise(resolve=>{resolveList=resolve;});
+  api.getCategoryCounts=()=>new Promise(resolve=>{resolveCategory=resolve;});
+  const lateRow={...MESSAGE,id:'late-obsolete',subject:'Obsolete synthetic row'};
+  let work;
+  await React.act(async()=>{work=refreshConnectionData(()=>current,async()=>true);await Promise.resolve();});
+  current=false;
+  await React.act(async()=>{
+    resolveList({messages:[lateRow],total:91});resolveCategory({counts:{primary:91},totals:{primary:91}});
+    assert.equal(await work,false);
+  });
+  assert.equal(useStore.getState().messages.some(m=>m.id===lateRow.id),false);
+  assert.equal(useStore.getState().categoryTotals.primary,1);
+  const rows=[];
+  api.getMessages=async params=>{rows.push(params);return {messages:[],total:0};};
+  api.getCategoryCounts=async()=>({counts:{},totals:{}});
+  await React.act(async()=>useStore.setState({selectedFolder:'Archive'}));
+  await React.act(async()=>assert.equal(await refreshConnectionData(()=>true,async()=>true),true));
+  assert.equal(rows.at(-1).folder,'Archive');
+  assert.equal(useStore.getState().messagesTotal,0);
+  api.getMessages=oldGet;api.getCategoryCounts=oldCategory;
+  await React.act(async()=>root.unmount());root=null;
+});
+test('connection reconciliation refreshes active search and keeps refresh failures visible', async () => {
+  await mountCategories({rows:[MESSAGE]});
+  const oldSearch=api.search;
+  api.search=async()=>({messages:[]});
+  await React.act(async()=>useStore.getState().setSearchQuery('Synthetic missed mail'));
+  const newRow={...MESSAGE,id:'recovered-search',subject:'Recovered synthetic search'};
+  api.search=async()=>({messages:[newRow]});
+  await React.act(async()=>assert.equal(await refreshConnectionData(()=>true,async()=>true),true));
+  assert.deepEqual(useStore.getState().searchResults.map(m=>m.id),[newRow.id]);
+  api.search=async()=>{throw new Error('Synthetic search failure');};
+  await React.act(async()=>assert.rejects(refreshConnectionData(()=>true,async()=>true),/Synthetic search failure/));
+  assert.deepEqual(useStore.getState().searchResults.map(m=>m.id),[newRow.id]);
+  api.search=oldSearch;await React.act(async()=>root.unmount());root=null;
+});
+test('pending initial list load cannot replace a completed connection catch-up', async () => {
+  const oldGet=api.getMessages;let resolveInitial;
+  api.getMessages=()=>new Promise(resolve=>{resolveInitial=resolve;});
+  await mount({rows:[MESSAGE],threadedView:false});
+  const recovered={...MESSAGE,id:'fresh-recovered',subject:'Fresh synthetic catch-up'};
+  api.getMessages=async()=>({messages:[recovered],total:1});
+  await React.act(async()=>assert.equal(await refreshConnectionData(()=>true,async()=>true),true));
+  await React.act(async()=>resolveInitial({messages:[MESSAGE],total:1}));
+  assert.deepEqual(useStore.getState().messages.map(m=>m.id),[recovered.id]);
+  api.getMessages=oldGet;await React.act(async()=>root.unmount());root=null;
+});
+test('connection catch-up during archive undo delay cannot restore removed rows/counts; undo then reconciles', async () => {
+  await mountCategories({rows:[MESSAGE],counts:{primary:1},totals:{primary:1}});
+  await React.act(async()=>useStore.getState().setSelectedMessage(MESSAGE.id));
+  const clock=captureUndoCommits();const oldArchive=api.bulkArchive;
+  api.bulkArchive=async()=>({archived:[MESSAGE.id]});
+  try {
+    await React.act(async()=>shortcutBus.emit('archive'));
+    await React.act(async()=>assert.rejects(refreshConnectionData(()=>true,async()=>true),/superseded/));
+    assert.equal(useStore.getState().categoryTotals.primary,0);
+    assert.equal(useStore.getState().messages.some(m=>m.id===MESSAGE.id),false);
+    const toast=useStore.getState().notifications.find(n=>n.onUndo);
+    await React.act(async()=>{toast.onUndo();await new Promise(resolve=>setTimeout(resolve,90));});
+    await React.act(async()=>assert.equal(await refreshConnectionData(()=>true,async()=>true),true));
+    assert.equal(useStore.getState().categoryTotals.primary,1);
+    assert.equal(useStore.getState().categoryCounts.primary,1);
+    assert.equal(useStore.getState().messages.some(m=>m.id===MESSAGE.id),true);
+  } finally {clock.restore();api.bulkArchive=oldArchive;deleteGuards.clearDeleteGuard(MESSAGE.id);await React.act(async()=>root.unmount());root=null;}
+});

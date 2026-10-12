@@ -375,6 +375,8 @@ export const useStore = create((set, get) => ({
   setSelectedMessage: (id) => set(id ? { selectedMessageId: id, lastViewedMessageId: id } : { selectedMessageId: null }),
 
   // Server snapshots are retained separately from a bounded optimistic window.
+  connectionStatus: { phase: 'healthy' },
+  setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
   serverUnreadCounts: { total: 0, byAccount: {}, snapshots: {} },
   pendingCounts: {},
   unreadCounts: { total: 0, byAccount: {}, snapshots: {}, complete: false },

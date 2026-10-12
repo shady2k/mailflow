@@ -1960,5 +1960,13 @@
     "resume": "Pokračovat v indexování",
     "retry": "Opakovat neúspěšná stahování",
     "saving": "Ukládání…"
+  },
+  "connection": {
+    "offline": "Bez sítě",
+    "unavailable": "Bez spojení",
+    "connecting": "Připojování…",
+    "refreshing": "Obnovování zpráv…",
+    "refreshError": "Zprávy se nepodařilo obnovit",
+    "blocked": "Připojení bylo odmítnuto."
   }
 }

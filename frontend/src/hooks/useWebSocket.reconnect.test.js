@@ -16,12 +16,17 @@ class FakeSocket {
   static CLOSED = 3;
   constructor() { socket = this; this.readyState = 0; }
   close() { this.readyState = 2; }
+  send() {}
 }
 globalThis.WebSocket = FakeSocket;
 const React = await import('react');
 const { createRoot } = await import('react-dom/client');
 const { api } = await import('../utils/api.js');
+const { useStore } = await import('../store/index.js');
 const { useWebSocket } = await import('./useWebSocket.js');
+const { registerConnectionRefresh } = await import('../utils/connectionRefresh.js');
+registerConnectionRefresh('categories', async () => true);
+registerConnectionRefresh('messages', async () => { window.dispatchEvent(new CustomEvent('mailflow:refresh')); return true; });
 function App() { useWebSocket(); return null; }
 
 test('resume replaces half-open transport, catches up once, and respects auth closure', async () => {
@@ -110,6 +115,106 @@ test('connection deadline and heartbeat recover without a close event; backend c
     api.getUnreadCounts = originalCounts;
     globalThis.setTimeout = originalTimeout; globalThis.setInterval = originalInterval;
     globalThis.clearTimeout = originalClearTimeout; globalThis.clearInterval = originalClearInterval;
-    dom.window.close();
+
+  }
+});
+
+test('recovery stays visible until data succeeds; retry is deduplicated and auth uses existing expiry path', async () => {
+  const root = createRoot(document.getElementById('root'));
+  const original = api.getUnreadCounts, originalNow = Date.now;
+  let clock = originalNow(), resolveList, rejectList, calls = 0;
+  Date.now = () => clock;
+  let listWork = new Promise((resolve, reject) => { resolveList=resolve; rejectList=reject; });
+  const removeList = registerConnectionRefresh('messages', async current => { calls++; const result=await listWork; return current() && result; });
+  api.getUnreadCounts = async () => ({ total: 0, byAccount: {} });
+  try {
+    useStore.getState().setConnectionStatus({ phase: 'healthy' });
+    await React.act(async () => root.render(React.createElement(App)));
+    assert.equal(useStore.getState().connectionStatus.phase,'healthy','cold start has no immediate warning');
+    socket.readyState=WebSocket.OPEN;
+    await React.act(async () => socket.onopen());
+    await React.act(async () => window.dispatchEvent(new window.Event('offline')));
+    assert.equal(useStore.getState().connectionStatus.phase,'offline');
+    await React.act(async () => window.dispatchEvent(new window.Event('online')));
+    socket.readyState=WebSocket.OPEN;
+    await React.act(async () => socket.onopen());
+    assert.equal(useStore.getState().connectionStatus.phase,'refreshing');
+    await React.act(async () => {
+      window.dispatchEvent(new CustomEvent('mailflow:connection-retry'));
+      window.dispatchEvent(new CustomEvent('mailflow:connection-retry'));
+    });
+    assert.equal(calls,1,'manual retries cannot duplicate pending refresh');
+    await React.act(async () => rejectList(new Error('Synthetic refresh error')));
+    assert.equal(useStore.getState().connectionStatus.phase,'refreshError');
+    listWork = new Promise(resolve=>{resolveList=resolve;});clock+=1100;
+    await React.act(async () => window.dispatchEvent(new CustomEvent('mailflow:connection-retry')));
+    assert.equal(useStore.getState().connectionStatus.phase,'refreshing');
+    await React.act(async () => resolveList(true));
+    assert.equal(useStore.getState().connectionStatus.phase,'healthy');
+    let expired=0;const onExpired=()=>expired++;
+    window.addEventListener('mailflow:session_expired',onExpired);
+    const originalFetch=globalThis.fetch;
+    globalThis.fetch=async()=>({ok:false,status:401,json:async()=>({error:'Unauthorized'})});
+    api.getUnreadCounts=original;
+    socket.readyState=WebSocket.CLOSED;
+    await React.act(async()=>socket.onclose({code:1008}));
+    assert.equal(expired,1);
+    assert.equal(useStore.getState().connectionStatus.phase,'blocked');
+    globalThis.fetch=originalFetch;window.removeEventListener('mailflow:session_expired',onExpired);
+  } finally {
+    await React.act(async()=>root.unmount());removeList();api.getUnreadCounts=original;Date.now=originalNow;
+  }
+});
+
+test('refresh timeout invalidates late values before manual retry succeeds', async () => {
+  const root=createRoot(document.getElementById('root'));
+  const originalTimeout=globalThis.setTimeout, originalClear=globalThis.clearTimeout, originalCounts=api.getUnreadCounts;
+  const deadlines=new Map();let timerId=9000, resolveOld, resolveNew, applied=[];
+  globalThis.setTimeout=(fn,delay,...args)=>{if(delay===30000){deadlines.set(++timerId,fn);return timerId;}return originalTimeout(fn,delay,...args);};
+  globalThis.clearTimeout=id=>{if(!deadlines.delete(id))originalClear(id);};
+  let work=new Promise(resolve=>{resolveOld=resolve;});
+  const unregister=registerConnectionRefresh('messages',async current=>{const value=await work;if(!current())return false;applied.push(value);return true;});
+  api.getUnreadCounts=async()=>({total:0,byAccount:{}});
+  try {
+    await React.act(async()=>root.render(React.createElement(App)));socket.readyState=WebSocket.OPEN;await React.act(async()=>socket.onopen());
+    await React.act(async()=>window.dispatchEvent(new window.Event('online')));socket.readyState=WebSocket.OPEN;await React.act(async()=>socket.onopen());
+    const timeout=[...deadlines][0];assert.ok(timeout);
+    await React.act(async()=>{deadlines.delete(timeout[0]);timeout[1]();});
+    assert.equal(useStore.getState().connectionStatus.phase,'refreshError');
+    work=new Promise(resolve=>{resolveNew=resolve;});
+    await React.act(async()=>window.dispatchEvent(new CustomEvent('mailflow:connection-retry')));
+    await React.act(async()=>resolveNew('fresh'));
+    assert.equal(useStore.getState().connectionStatus.phase,'healthy');
+    await React.act(async()=>resolveOld('obsolete'));
+    assert.deepEqual(applied,['fresh']);assert.equal(useStore.getState().connectionStatus.phase,'healthy');
+  } finally {
+    await React.act(async()=>root.unmount());unregister();api.getUnreadCounts=originalCounts;
+    globalThis.setTimeout=originalTimeout;globalThis.clearTimeout=originalClear;
+  }
+});
+
+test('loaded folder snapshots participate in catch-up and late disconnected folders cannot apply', async () => {
+  const root=createRoot(document.getElementById('root'));
+  const oldCounts=api.getUnreadCounts, oldFolders=api.getFolders;
+  const removeList=registerConnectionRefresh('messages',async()=>true), removeCategories=registerConnectionRefresh('categories',async()=>true);
+  let resolveFolders, fail=true;
+  api.getUnreadCounts=async()=>({total:0,byAccount:{}});
+  api.getFolders=async()=>{if(fail)throw new Error('Synthetic folder failure');return new Promise(resolve=>{resolveFolders=resolve;});};
+  useStore.setState({accounts:[{id:'synthetic-a'}],folders:{'synthetic-a':[{path:'Archive',total:1}]}});
+  try {
+    await React.act(async()=>root.render(React.createElement(App)));socket.readyState=WebSocket.OPEN;await React.act(async()=>socket.onopen());
+    await React.act(async()=>window.dispatchEvent(new window.Event('online')));socket.readyState=WebSocket.OPEN;await React.act(async()=>socket.onopen());
+    assert.equal(useStore.getState().connectionStatus.phase,'refreshError');
+    fail=false;await React.act(async()=>window.dispatchEvent(new CustomEvent('mailflow:connection-retry')));
+    assert.equal(useStore.getState().connectionStatus.phase,'refreshing');
+    await React.act(async()=>window.dispatchEvent(new window.Event('offline')));
+    await React.act(async()=>resolveFolders([{path:'Archive',total:90}]));
+    assert.equal(useStore.getState().folders['synthetic-a'][0].total,1);
+    await React.act(async()=>window.dispatchEvent(new window.Event('online')));socket.readyState=WebSocket.OPEN;await React.act(async()=>socket.onopen());
+    await React.act(async()=>resolveFolders([{path:'Archive',total:2}]));
+    assert.equal(useStore.getState().folders['synthetic-a'][0].total,2);
+    assert.equal(useStore.getState().connectionStatus.phase,'healthy');
+  } finally {
+    await React.act(async()=>root.unmount());removeList();removeCategories();api.getUnreadCounts=oldCounts;api.getFolders=oldFolders;dom.window.close();
   }
 });

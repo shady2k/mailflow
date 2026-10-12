@@ -1,3 +1,4 @@
+import ConnectionStatus from './ConnectionStatus.jsx';
 import { formatDateTime } from '../utils/formatDate.js';
 import { useEffect, useLayoutEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -1580,6 +1581,8 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
           </button>
         </div>
       )}
+
+      {isMobile && <ConnectionStatus />}
 
       {/* Toolbar — always pinned at top, never scrolls */}
       <div style={{

@@ -1941,5 +1941,13 @@
     "resume": "Indizierung fortsetzen",
     "retry": "Fehlgeschlagene Downloads wiederholen",
     "saving": "Wird gespeichert…"
+  },
+  "connection": {
+    "offline": "Offline",
+    "unavailable": "Keine Verbindung",
+    "connecting": "Verbindung wird hergestellt…",
+    "refreshing": "Nachrichten werden aktualisiert…",
+    "refreshError": "Nachrichten konnten nicht aktualisiert werden",
+    "blocked": "Verbindung abgelehnt."
   }
 }

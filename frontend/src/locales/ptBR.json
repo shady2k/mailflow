@@ -1941,5 +1941,13 @@
     "resume": "Retomar a indexação",
     "retry": "Repetir downloads com falha",
     "saving": "Salvando…"
+  },
+  "connection": {
+    "offline": "Sem rede",
+    "unavailable": "Sem conexão",
+    "connecting": "Conectando…",
+    "refreshing": "Atualizando mensagens…",
+    "refreshError": "Não foi possível atualizar as mensagens",
+    "blocked": "Conexão recusada."
   }
 }

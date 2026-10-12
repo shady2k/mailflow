@@ -1,3 +1,4 @@
+import { refreshConnectionData } from '../utils/connectionRefresh.js';
 import { useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/index.js';
@@ -43,6 +44,51 @@ export function useWebSocket() {
   const authBlocked = useRef(false);
   const needsCatchUp = useRef(false);
   const reconnectAttempt = useRef(0);
+  const refreshGeneration = useRef(0);
+  const refreshTimer = useRef(null);
+  const refreshPromise = useRef(null);
+  const lastRetry = useRef(0);
+  const setStatus = useCallback((phase) => {
+    if (mountedRef.current) useStore.getState().setConnectionStatus({ phase });
+  }, []);
+  const reconcile = useCallback(() => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN || refreshPromise.current) return;
+    clearTimeout(refreshTimer.current);
+    const generation = ++refreshGeneration.current;
+    const current = () => mountedRef.current && refreshGeneration.current === generation && wsRef.current === ws && ws.readyState === WebSocket.OPEN;
+    setStatus('refreshing');
+    let deadline;
+    const work = Promise.race([
+      refreshConnectionData(current, async () => {
+        const state = useStore.getState();
+        const folderAccounts = Object.keys(state.folders).filter(id => state.accounts.some(account => account.id === id));
+        const [counts, ...folders] = await Promise.all([
+          api.getUnreadCounts(), ...folderAccounts.map(id => api.getFolders(id)),
+        ]);
+        if (!current() || useStore.getState().user?.id !== state.user?.id) return false;
+        useStore.getState().setUnreadCounts(counts);
+        folderAccounts.forEach((id, index) => useStore.getState().setFolders(id, folders[index]));
+        return true;
+      }),
+      new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Refresh timeout')), 30000); }),
+    ]);
+    refreshPromise.current = work;
+    work.then(success => {
+      if (current() && success) {
+        setStatus('healthy');
+        dispatchPluginReconnect();
+      }
+    }).catch(() => {
+      if (!current()) return;
+      setStatus('refreshError');
+      ++refreshGeneration.current;
+      refreshTimer.current = setTimeout(reconcile, 30000);
+    }).finally(() => {
+      clearTimeout(deadline);
+      if (refreshPromise.current === work) refreshPromise.current = null;
+    });
+  }, [setStatus]);
   // True once the socket has connected at least once. Distinguishes the initial
   // page-load connect (message list is freshly fetched anyway) from any later
   // reconnect — backoff OR a wake/visibility revive — which must run the catch-up
@@ -54,7 +100,12 @@ export function useWebSocket() {
 
   const connect = useCallback(() => {
     if (!mountedRef.current || authBlocked.current) return;
+    if (window.navigator.onLine === false) { setStatus('offline'); return; }
     clearTimeout(reconnectTimer.current);
+    clearTimeout(refreshTimer.current);
+    ++refreshGeneration.current;
+    refreshPromise.current = null;
+    if (wsRef.current || hasConnectedBefore.current) setStatus('connecting');
     if (wsRef.current) needsCatchUp.current = true;
     // Clean up any existing socket before opening a new one — prevents duplicate
     // connections if connect() is called while a previous socket is still open.
@@ -62,6 +113,7 @@ export function useWebSocket() {
       wsRef.current.onopen = null;
       wsRef.current.onmessage = null;
       wsRef.current.onerror = null;
+      clearTimeout(wsRef.current._statusTimer);
       clearTimeout(wsRef.current._connectTimeout);
       wsRef.current.onclose = null;  // prevent old socket's close from scheduling another reconnect
       clearInterval(wsRef.current._pingInterval);
@@ -70,11 +122,15 @@ export function useWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
+    ws._statusTimer = setTimeout(() => {
+      if (wsRef.current === ws && ws.readyState === WebSocket.CONNECTING) setStatus('connecting');
+    }, 2000);
     ws._connectTimeout = setTimeout(() => {
       if (wsRef.current === ws && ws.readyState === WebSocket.CONNECTING) connect();
     }, 15000);
 
     ws.onopen = () => {
+      clearTimeout(ws._statusTimer);
       clearTimeout(ws._connectTimeout);
       const wasReconnect = hasConnectedBefore.current || needsCatchUp.current;
       needsCatchUp.current = false;
@@ -96,15 +152,8 @@ export function useWebSocket() {
       // On reconnect, catch up on any messages that arrived during the outage
       if (wasReconnect) {
         recordDiagEvent({ category: 'ws', type: 'reconnect' });
-        window.dispatchEvent(new CustomEvent('mailflow:refresh'));
-        api.getUnreadCounts().then(counts => {
-          useStore.getState().setUnreadCounts(counts);
-        }).catch(() => {});
-        // A plugin's rail/derived data can drift during the outage — events fired while the socket
-        // was down are lost, not buffered. Let each activated plugin resync (GTD refetches its
-        // sections). Core stays plugin-agnostic.
-        dispatchPluginReconnect();
-      }
+        reconcile();
+      } else setStatus('healthy');
     };
 
     ws.onmessage = (event) => {
@@ -117,10 +166,20 @@ export function useWebSocket() {
 
     ws.onclose = (event) => {
       clearInterval(ws._pingInterval);
+      clearTimeout(ws._statusTimer);
       clearTimeout(ws._connectTimeout);
       if (wsRef.current !== ws) return;
       if (NO_RECONNECT_CODES.has(event.code)) authBlocked.current = true;
-      if (!mountedRef.current || authBlocked.current) return;
+      ++refreshGeneration.current;
+      refreshPromise.current = null;
+      clearTimeout(refreshTimer.current);
+      if (!mountedRef.current) return;
+      setStatus(window.navigator.onLine === false ? 'offline' : 'unavailable');
+      if (authBlocked.current) {
+        setStatus('blocked');
+        api.getUnreadCounts().catch(() => {});
+        return;
+      }
       const attempt = reconnectAttempt.current;
       const delay = Math.min(BACKOFF_BASE * 2 ** attempt, BACKOFF_MAX);
       const jitter = Math.random() * 0.3 * delay;
@@ -380,10 +439,15 @@ export function useWebSocket() {
   useEffect(() => {
     mountedRef.current = true;
     connect();
+    const generation = refreshGeneration;
     return () => {
       mountedRef.current = false;
+      ++generation.current;
+      refreshPromise.current = null;
+      clearTimeout(refreshTimer.current);
       clearTimeout(reconnectTimer.current);
       if (wsRef.current) {
+        clearTimeout(wsRef.current._statusTimer);
         clearTimeout(wsRef.current._connectTimeout);
         clearInterval(wsRef.current._pingInterval);
         wsRef.current.onopen = null;
@@ -420,6 +484,34 @@ export function useWebSocket() {
       window.removeEventListener('pageshow', revive);
     };
   }, [connect]);
+
+  useEffect(() => {
+    const retry = () => {
+      if (Date.now() - lastRetry.current < 1000 || authBlocked.current) return;
+      lastRetry.current = Date.now();
+      if (wsRef.current?.readyState === WebSocket.CONNECTING) return;
+      if (wsRef.current?.readyState === WebSocket.OPEN) reconcile();
+      else connect();
+    };
+    const offline = () => {
+      needsCatchUp.current = true;
+      ++refreshGeneration.current;
+      refreshPromise.current = null;
+      clearTimeout(refreshTimer.current);
+      setStatus('offline');
+    };
+    const scopeChanged = () => {
+      if (useStore.getState().connectionStatus.phase === 'refreshError') reconcile();
+    };
+    window.addEventListener('mailflow:connection-retry', retry);
+    window.addEventListener('mailflow:connection-scope', scopeChanged);
+    window.addEventListener('offline', offline);
+    return () => {
+      window.removeEventListener('mailflow:connection-retry', retry);
+      window.removeEventListener('mailflow:connection-scope', scopeChanged);
+      window.removeEventListener('offline', offline);
+    };
+  }, [connect, reconcile, setStatus]);
 
   return wsRef;
 }

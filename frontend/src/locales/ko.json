@@ -1941,5 +1941,13 @@
     "resume": "색인 재개",
     "retry": "실패한 다운로드 재시도",
     "saving": "저장 중…"
+  },
+  "connection": {
+    "offline": "오프라인",
+    "unavailable": "연결 끊김",
+    "connecting": "연결 중…",
+    "refreshing": "메일 새로고침 중…",
+    "refreshError": "메일을 새로고침할 수 없습니다",
+    "blocked": "연결이 거부되었습니다."
   }
 }

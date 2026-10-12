@@ -1941,5 +1941,13 @@
     "resume": "Resume indexing",
     "retry": "Retry failed downloads",
     "saving": "Saving…"
+  },
+  "connection": {
+    "offline": "Offline",
+    "unavailable": "No connection",
+    "connecting": "Connecting…",
+    "refreshing": "Refreshing messages…",
+    "refreshError": "Could not refresh messages",
+    "blocked": "Connection refused."
   }
 }
