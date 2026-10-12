@@ -1,3 +1,4 @@
+import BodyIndexStatus from './BodyIndexStatus.jsx';
 import { useCallback, useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/index.js';
@@ -552,6 +553,8 @@ function AccountForm({ initial, onSave, onCancel }) {
         </>
       )}
 
+      {isEdit && form.protocol === 'imap' && <BodyIndexStatus accountId={initial.id} detailed />}
+
       {error && (
         <div style={{
           padding: '10px 14px', background: 'rgba(248,113,113,0.1)',
@@ -1087,6 +1090,8 @@ function AccountsTab() {
           {t('admin.accounts.addButton')}
         </button>
       </div>
+
+      <BodyIndexStatus accountId={null} detailed />
 
       {accounts.length === 0 && (
         <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-tertiary)', fontSize: 14 }}>

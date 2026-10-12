@@ -1902,6 +1902,10 @@
   "search": {
     "indexUnavailable": "Search indexing status unavailable",
     "indexProgress": "Headers: {{headers}} · Bodies searchable: {{bodies}}/{{headers}}",
-    "indexRetrying": "Retrying: {{count}}"
+    "indexRetrying": "Retrying: {{count}}",
+    "indexSettingsTitle": "Search indexing",
+    "indexScope": "Coverage includes headers already synchronized; pending bodies are indexed automatically with retries.",
+    "indexPending": "Pending: {{count}}",
+    "indexRefresh": "Refresh status"
   }
 }

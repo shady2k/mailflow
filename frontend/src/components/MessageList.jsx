@@ -2704,7 +2704,7 @@ export default function MessageList() {
       background: 'var(--bg-primary)',
     }}>
 
-      <BodyIndexStatus />
+      <BodyIndexStatus silent />
 
       {/* ── Mobile header ───────────────────────────────────────────────── */}
       {isMobile && (

@@ -1902,6 +1902,10 @@
   "search": {
     "indexUnavailable": "Status da indexação indisponível",
     "indexProgress": "Cabeçalhos: {{headers}} · Corpos pesquisáveis: {{bodies}}/{{headers}}",
-    "indexRetrying": "Novas tentativas: {{count}}"
+    "indexRetrying": "Novas tentativas: {{count}}",
+    "indexSettingsTitle": "Indexação da pesquisa",
+    "indexScope": "A cobertura inclui os cabeçalhos já sincronizados. Os corpos pendentes são indexados automaticamente com novas tentativas.",
+    "indexPending": "Pendentes: {{count}}",
+    "indexRefresh": "Atualizar status"
   }
 }

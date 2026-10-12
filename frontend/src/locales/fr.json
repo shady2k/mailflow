@@ -1902,6 +1902,10 @@
   "search": {
     "indexUnavailable": "État de l’indexation indisponible",
     "indexProgress": "En-têtes : {{headers}} · Corps recherchables : {{bodies}}/{{headers}}",
-    "indexRetrying": "Nouvelles tentatives : {{count}}"
+    "indexRetrying": "Nouvelles tentatives : {{count}}",
+    "indexSettingsTitle": "Indexation de la recherche",
+    "indexScope": "La couverture concerne les en-têtes déjà synchronisés. Les corps en attente sont indexés automatiquement avec de nouvelles tentatives.",
+    "indexPending": "En attente : {{count}}",
+    "indexRefresh": "Actualiser le statut"
   }
 }

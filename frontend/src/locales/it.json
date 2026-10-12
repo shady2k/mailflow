@@ -1902,6 +1902,10 @@
   "search": {
     "indexUnavailable": "Stato dell’indicizzazione non disponibile",
     "indexProgress": "Intestazioni: {{headers}} · Corpi ricercabili: {{bodies}}/{{headers}}",
-    "indexRetrying": "Nuovi tentativi: {{count}}"
+    "indexRetrying": "Nuovi tentativi: {{count}}",
+    "indexSettingsTitle": "Indicizzazione della ricerca",
+    "indexScope": "La copertura comprende le intestazioni già sincronizzate. I corpi in attesa vengono indicizzati automaticamente con nuovi tentativi.",
+    "indexPending": "In attesa: {{count}}",
+    "indexRefresh": "Aggiorna stato"
   }
 }

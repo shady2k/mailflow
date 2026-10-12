@@ -77,3 +77,18 @@ test('dense row selection and starring do not open the message', async () => {
     assert.equal(opened,1);
   } finally {await React.act(async()=>root.unmount());}
 });
+test('Inbox preview has a separate ellipsized line only when enabled and nonempty', async () => {
+  const root=createRoot(document.getElementById('root'));
+  const message={id:'m',from_name:'Synthetic Sender',subject:'Long Subject '.repeat(80),snippet:'Long Preview '.repeat(100),date:'2026-10-11'};
+  const render=async(showPreview, snippet=message.snippet)=>React.act(async()=>root.render(React.createElement(InboxRowContent,{message:{...message,snippet},unread:true,checked:false,showPreview,onStar:()=>{},onToggleSelect:()=>{}})));
+  try {
+    await render(true);
+    const subject=document.querySelector('[data-inbox-subject]'),preview=document.querySelector('[data-inbox-snippet]');
+    assert.equal(subject.textContent,message.subject);assert.equal(preview.textContent,message.snippet);
+    assert.equal(subject.style.display,'block');assert.equal(preview.style.display,'block');
+    assert.equal(subject.style.textOverflow,'ellipsis');assert.equal(preview.style.textOverflow,'ellipsis');
+    assert.equal(document.querySelector('[data-inbox-row]').style.fontWeight,'600');
+    await render(false);assert.equal(document.querySelector('[data-inbox-snippet]'),null);
+    await render(true,'');assert.equal(document.querySelector('[data-inbox-snippet]'),null);
+  } finally {await React.act(async()=>root.unmount());}
+});

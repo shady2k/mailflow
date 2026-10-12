@@ -1902,6 +1902,10 @@
   "search": {
     "indexUnavailable": "Estado de indexación no disponible",
     "indexProgress": "Cabeceras: {{headers}} · Cuerpos buscables: {{bodies}}/{{headers}}",
-    "indexRetrying": "Reintentos: {{count}}"
+    "indexRetrying": "Reintentos: {{count}}",
+    "indexSettingsTitle": "Indexación de búsqueda",
+    "indexScope": "La cobertura incluye las cabeceras ya sincronizadas. Los cuerpos pendientes se indexan automáticamente con reintentos.",
+    "indexPending": "Pendientes: {{count}}",
+    "indexRefresh": "Actualizar estado"
   }
 }

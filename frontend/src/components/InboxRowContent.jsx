@@ -13,8 +13,8 @@ export default function InboxRowContent({ message, unread, checked, onToggleSele
     {count > 1 && <button aria-expanded={expanded} aria-label={t('messageList.showAll')} onClick={e => { e.stopPropagation(); onToggleThread(); }}
       style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', flexShrink: 0 }}>({count})</button>}
     <div style={{ ...ellipsis, flex: 1 }}>
-      <span>{message.subject || t('message.noSubject')}</span>
-      {showPreview && message.snippet && <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> — {message.snippet}</span>}
+      <span data-inbox-subject style={{ ...ellipsis, display: 'block', lineHeight: '18px' }}>{message.subject || t('message.noSubject')}</span>
+      {showPreview && message.snippet && <span data-inbox-snippet style={{ ...ellipsis, display: 'block', color: 'var(--text-tertiary)', fontWeight: 400, fontSize: 12, lineHeight: '17px' }}>{message.snippet}</span>}
     </div>
     {message.has_attachments && <span aria-label={t('message.attachment', { count: 1 })} style={{ flexShrink: 0 }}>⌁</span>}
     <span style={{ whiteSpace: 'nowrap', color: 'var(--text-secondary)', fontSize: 11, flexShrink: 0 }}>{formatDate(message.date)}</span>

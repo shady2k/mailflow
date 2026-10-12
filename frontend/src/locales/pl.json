@@ -1921,6 +1921,10 @@
   "search": {
     "indexUnavailable": "Stan indeksowania wyszukiwania jest niedostępny",
     "indexProgress": "Nagłówki: {{headers}} · Przeszukiwalne treści: {{bodies}}/{{headers}}",
-    "indexRetrying": "Ponowne próby: {{count}}"
+    "indexRetrying": "Ponowne próby: {{count}}",
+    "indexSettingsTitle": "Indeksowanie wyszukiwania",
+    "indexScope": "Zakres obejmuje już zsynchronizowane nagłówki. Oczekujące treści są indeksowane automatycznie z ponawianiem prób.",
+    "indexPending": "Oczekujące: {{count}}",
+    "indexRefresh": "Odśwież stan"
   }
 }

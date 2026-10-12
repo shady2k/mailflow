@@ -1902,6 +1902,10 @@
   "search": {
     "indexUnavailable": "搜索索引状态不可用",
     "indexProgress": "邮件头：{{headers}} · 可搜索正文：{{bodies}}/{{headers}}",
-    "indexRetrying": "重试中：{{count}}"
+    "indexRetrying": "重试中：{{count}}",
+    "indexSettingsTitle": "搜索索引",
+    "indexScope": "覆盖范围包含已同步的邮件头。待处理的正文会自动建立索引，并在出错时重试。",
+    "indexPending": "待处理：{{count}}",
+    "indexRefresh": "刷新状态"
   }
 }
