@@ -319,8 +319,7 @@
     "backToList": "Powrót do listy"
   },
   "messageList": {
-    "categoryTotal": "Łącznie {{count}}",
-    "categoryUnread": "Nieprzeczytane: {{count}}",
+    "categoryCountsLabel": "Łącznie {{total}}, nieprzeczytane {{unread}}",
     "categoryCountUnknown": "Liczba niedostępna",
     "categoryEmpty": "Brak wiadomości w {{category}}",
     "categoryEmptyUnread": "Brak nieprzeczytanych wiadomości w {{category}}",

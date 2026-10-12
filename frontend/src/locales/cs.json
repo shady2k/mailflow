@@ -164,8 +164,7 @@
     "updateAvailable": "Je dostupná aktualizace: v{{version}}"
   },
   "messageList": {
-    "categoryTotal": "Celkem {{count}}",
-    "categoryUnread": "Nepřečtené: {{count}}",
+    "categoryCountsLabel": "Celkem {{total}}, nepřečtené {{unread}}",
     "categoryCountUnknown": "Počet není k dispozici",
     "categoryEmpty": "Žádné zprávy v {{category}}",
     "categoryEmptyUnread": "Žádné nepřečtené zprávy v {{category}}",

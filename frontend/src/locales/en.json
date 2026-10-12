@@ -317,8 +317,7 @@
     "backToList": "Back to list"
   },
   "messageList": {
-    "categoryTotal": "{{count}} total",
-    "categoryUnread": "{{count}} unread",
+    "categoryCountsLabel": "{{total}} total, {{unread}} unread",
     "categoryCountUnknown": "Count unavailable",
     "categoryEmpty": "No messages in {{category}}",
     "categoryEmptyUnread": "No unread messages in {{category}}",

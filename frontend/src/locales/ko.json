@@ -317,8 +317,7 @@
     "backToList": "목록으로 돌아가기"
   },
   "messageList": {
-    "categoryTotal": "전체 {{count}}개",
-    "categoryUnread": "안 읽음 {{count}}개",
+    "categoryCountsLabel": "전체 {{total}}개, 안 읽음 {{unread}}개",
     "categoryCountUnknown": "개수를 확인할 수 없음",
     "categoryEmpty": "{{category}}에 메일이 없습니다",
     "categoryEmptyUnread": "{{category}}에 읽지 않은 메일이 없습니다",

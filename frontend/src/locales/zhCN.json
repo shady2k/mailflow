@@ -317,8 +317,7 @@
     "backToList": "返回列表"
   },
   "messageList": {
-    "categoryTotal": "共 {{count}} 封",
-    "categoryUnread": "未读 {{count}} 封",
+    "categoryCountsLabel": "共 {{total}} 封，未读 {{unread}} 封",
     "categoryCountUnknown": "数量不可用",
     "categoryEmpty": "{{category}}中没有邮件",
     "categoryEmptyUnread": "{{category}}中没有未读邮件",

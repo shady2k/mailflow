@@ -317,8 +317,7 @@
     "backToList": "Назад к списку"
   },
   "messageList": {
-    "categoryTotal": "{{count}} всего",
-    "categoryUnread": "{{count}} непроч.",
+    "categoryCountsLabel": "Всего {{total}}, непрочитанных {{unread}}",
     "categoryCountUnknown": "Количество неизвестно",
     "categoryEmpty": "В категории «{{category}}» нет писем",
     "categoryEmptyUnread": "В категории «{{category}}» нет непрочитанных писем",

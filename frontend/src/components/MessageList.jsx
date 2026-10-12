@@ -3339,9 +3339,14 @@ export default function MessageList() {
               const unread = categoryCounts[cat] || 0;
               const total = categoryTotals === null ? null : categoryTotals[cat] || 0;
               const isActive = activeCategory === cat && !activeGtdTab;
+              const name = t(`messageList.categories.${cat}`);
+              const countsLabel = total === null ? t('messageList.categoryCountUnknown') : t('messageList.categoryCountsLabel', { total, unread });
               return (
                 <button
                   key={cat}
+                  title={countsLabel}
+                  aria-label={`${name}: ${countsLabel}`}
+                  aria-pressed={isActive}
                   onClick={() => { setActiveGtdTab(null); setActiveCategory(cat); }}
                   style={{
                     padding: '3px 11px', flexShrink: 0,
@@ -3349,25 +3354,14 @@ export default function MessageList() {
                     border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
                     background: 'none',
                     color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
-                    cursor: 'pointer', fontSize: 11, fontWeight: isActive ? 500 : 400,
+                    cursor: 'pointer', fontSize: 11, fontWeight: unread > 0 ? 600 : isActive ? 500 : 400,
                     whiteSpace: 'nowrap',
                     transition: 'color 0.15s, border-color 0.15s',
                     display: 'flex', alignItems: 'center', gap: 5,
                   }}
                 >
-                  {t(`messageList.categories.${cat}`)}
-                  <span aria-label={total === null ? t('messageList.categoryCountUnknown') : t('messageList.categoryTotal', { count: total })} title={total === null ? t('messageList.categoryCountUnknown') : t('messageList.categoryTotal', { count: total })} style={{ fontSize: 10, color: 'var(--text-tertiary)', fontVariantNumeric: 'tabular-nums' }}>{total === null ? '—' : total}</span>
-                  {unread > 0 && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 600, lineHeight: 1,
-                      padding: '1px 5px', borderRadius: 100,
-                      background: isActive ? 'var(--accent)' : 'var(--text-tertiary)',
-                      color: 'var(--bg-primary)',
-                      minWidth: 16, textAlign: 'center',
-                    }}>
-                      {t('messageList.categoryUnread', { count: unread })}
-                    </span>
-                  )}
+                  {name}
+                  {total > 0 && <span aria-hidden="true" style={{ fontSize: 10, color: unread > 0 ? 'inherit' : 'var(--text-tertiary)', fontWeight: 'inherit', fontVariantNumeric: 'tabular-nums' }}>{total}</span>}
                 </button>
               );
             })}

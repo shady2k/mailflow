@@ -20,7 +20,7 @@ registerHooks({
   load(url, context, nextLoad) {
     if (url.endsWith('react-i18next/dist/es/index.js') || url.endsWith('/react-i18next')) {
       return { format: 'module', shortCircuit: true, source: [
-        'export const useTranslation = () => ({ t: (k, d) => (typeof d === "string" ? d : d?.defaultValue ?? k), i18n: { language: "en", changeLanguage: () => {} } });',
+        'export const useTranslation = () => ({ t: (k, d) => k === "messageList.categoryCountsLabel" ? `Total ${d.total}, unread ${d.unread}` : (typeof d === "string" ? d : d?.defaultValue ?? k), i18n: { language: "en", changeLanguage: () => {} } });',
         'export const initReactI18next = { type: "3rdParty", init: () => {} };',
         'export const Trans = ({ children }) => children ?? null;',
         'export const I18nextProvider = ({ children }) => children ?? null;',
@@ -560,9 +560,10 @@ async function mountCategories({rows = [], counts = {}, totals = {}, enabled = t
 }
 test('category total remains visible when all messages are read and does not depend on loaded page', async () => {
   await mountCategories({rows:[{...MESSAGE,is_read:true}],counts:{primary:0,automated:2},totals:{primary:120,automated:7}});
-  assert.equal(categoryButton('primary').querySelector('[aria-label="messageList.categoryTotal"]').textContent,'120');
-  assert.doesNotMatch(categoryButton('primary').textContent,/categoryUnread/);
-  assert.match(categoryButton('automated').textContent,/7messageList.categoryUnread/);
+  assert.equal(categoryButton('primary').querySelector('span').textContent,'120');
+  assert.equal(categoryButton('primary').textContent,'messageList.categories.primary120');
+  assert.equal(categoryButton('automated').textContent,'messageList.categories.automated7');
+  assert.equal(categoryButton('automated').getAttribute('aria-label'),'messageList.categories.automated: Total 7, unread 2');
   const counter=[...container.querySelectorAll('span')].find(span=>span.title==='Cached results matching this filter');
   assert.ok(counter, 'account-specific categorization uses the filtered total even when global categorization is off');
   assert.equal(counter.textContent,'1');
@@ -587,7 +588,8 @@ test('category refresh rejects old account and older same-scope responses and ha
   api.getCategoryCounts=params=>new Promise((resolve,reject)=>requests.push({params,resolve,reject}));
   await React.act(async () => useStore.setState({messagesRefreshToken:useStore.getState().messagesRefreshToken+1}));
   await React.act(async () => useStore.setState({selectedAccountId:'acct-2',accounts:[{...ACCOUNT,enabled:true,categorization_enabled:true},{...ACCOUNT,id:'acct-2',enabled:true,categorization_enabled:true}]}));
-  assert.equal(categoryButton('primary').querySelector('[aria-label="messageList.categoryCountUnknown"]').textContent,'—');
+  assert.equal(categoryButton('primary').querySelector('span'),null);
+  assert.equal(categoryButton('primary').title,'messageList.categoryCountUnknown');
   await React.act(async () => requests[0].resolve({counts:{primary:9},totals:{primary:999}}));
   assert.equal(useStore.getState().categoryTotals,null);
   await React.act(async () => requests[1].resolve({counts:{primary:0},totals:{primary:2}}));
@@ -625,4 +627,25 @@ test('older category snapshots cannot undo optimistic unread changes', async () 
   assert.equal(useStore.getState().categoryCounts.primary,1);
   assert.equal(useStore.getState().categoryTotals.primary,8);
   await React.act(async () => root.unmount());root=null;
+});
+
+test('category pills show only total, hide zero, and use unread for emphasis and exact accessible counts', async () => {
+  for (const [total,unread] of [[0,0],[2,0],[2,2],[5,2]]) {
+    await mountCategories({counts:{primary:unread},totals:{primary:total}});
+    const button=categoryButton('primary');
+    assert.equal(button.textContent,`messageList.categories.primary${total > 0 ? total : ''}`);
+    assert.equal(button.querySelectorAll('span').length,total > 0 ? 1 : 0);
+    assert.equal(button.style.fontWeight,unread > 0 ? '600' : '500');
+    if (total > 0) {
+      assert.equal(button.querySelector('span').style.color,unread > 0 ? 'inherit' : 'var(--text-tertiary)');
+      assert.equal(button.querySelector('span').style.fontWeight,'inherit');
+    }
+    assert.equal(button.title,`Total ${total}, unread ${unread}`);
+    assert.equal(button.getAttribute('aria-label'),`messageList.categories.primary: Total ${total}, unread ${unread}`);
+    assert.equal(button.getAttribute('aria-pressed'),'true');
+    await React.act(async () => categoryButton('automated').click());
+    assert.equal(button.getAttribute('aria-pressed'),'false');
+    assert.equal(categoryButton('automated').getAttribute('aria-pressed'),'true');
+    await React.act(async () => root.unmount());root=null;
+  }
 });
