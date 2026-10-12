@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
+let windowStarted = 0;
+let traces = 0;
+
 export function bodyDiagnostics(res, enabled = process.env.MAILFLOW_BODY_DIAGNOSTICS === 'true', log = console.info) {
   if (!enabled) return () => {};
+  const now = Date.now();
+  if (now - windowStarted >= 60000) { windowStarted = now; traces = 0; }
+  if (traces >= 60) return () => {};
+  traces++;
   const requestId = randomUUID();
   const started = Date.now();
   const trace = (stage, metrics = {}) => {
