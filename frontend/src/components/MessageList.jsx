@@ -2775,6 +2775,9 @@ export default function MessageList() {
   const allSelected = displayMessages.length > 0 && displayMessages.every(message => selectedIds.has(message.id));
   const someSelected = selectedCount > 0 && !allSelected;
   const selectAllDisabled = displayMessages.length === 0 || isSearching || (!searchQuery.trim() && loadingMessages);
+  const selectAllCenter = singlePane
+    ? (threadedView && !searchQuery.trim() ? '20.5px' : 'calc(var(--layout-row-px, 14px) + 6.5px)')
+    : (isMobile || isNarrow ? '11px' : (threadedView && !searchQuery.trim() ? '29px' : 'calc(var(--layout-row-px, 14px) + 15px)'));
   const selectAllLabel = scrollMode === 'paginated' && !searchQuery.trim()
     ? (allSelected ? t('messageList.deselectCurrentPage') : t('messageList.selectCurrentPage'))
     : (allSelected ? t('messageList.deselectLoadedMessages') : t('messageList.selectLoadedMessages'));
@@ -3663,13 +3666,13 @@ export default function MessageList() {
           <div style={{
             position: 'sticky', top: 0, zIndex: 10,
             display: 'flex', alignItems: 'center', gap: 6,
-            padding: '0 10px', minHeight: 44,
+            padding: '0 10px 0 0', minHeight: 44,
             background: selectedCount > 0 ? 'var(--bg-elevated)' : 'var(--bg-primary)',
             borderBottom: '1px solid var(--border)',
             boxShadow: selectedCount > 0 ? '0 2px 8px rgba(0,0,0,0.18)' : 'none',
           }}>
             {/* Select-all checkbox */}
-            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 44, minHeight: 44, cursor: selectAllDisabled ? 'default' : 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', minWidth: 44, minHeight: 44, cursor: selectAllDisabled ? 'default' : 'pointer' }}>
               <input
                 type="checkbox"
                 data-select-all
@@ -3680,7 +3683,7 @@ export default function MessageList() {
                 disabled={selectAllDisabled}
                 onChange={event => event.target.checked ? selectAll(displayMessages) : clearSelection()}
                 title={selectAllLabel}
-                style={{ cursor: selectAllDisabled ? 'default' : 'pointer', accentColor: 'var(--accent)', flexShrink: 0 }}
+                style={{ cursor: selectAllDisabled ? 'default' : 'pointer', accentColor: 'var(--accent)', flexShrink: 0, position: 'absolute', left: `calc(${selectAllCenter} - 6.5px)`, margin: 0, width: 13, height: 13 }}
               />
             </label>
             <span style={{ fontSize: 12, color: 'var(--text-secondary)', flex: 1, userSelect: 'none' }}>
