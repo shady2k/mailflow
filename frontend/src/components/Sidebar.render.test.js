@@ -119,3 +119,47 @@ describe('Sidebar — collapsed folders show their subfolders\' unread mail (#53
     assert.equal(badgeOf('Banking'), '5');
   });
 });
+
+test('Inbox folder badge shares account optimism, Undo and ordered observations', async () => {
+  await mount({});
+  const observedAt = new Date().toISOString();
+  const snapshot = (count, revision) => ({ byAccount: { 'acct-1': count }, snapshots: { 'acct-1': { known: true, stale: false, observedAt, revision, attemptRevision: revision } } });
+  await React.act(async () => {
+    useStore.setState({ isLocked: false, serverUnreadCounts: { byAccount: {}, snapshots: {} }, pendingCounts: {}, user: { id: 'synthetic-user' } });
+    useStore.getState().setUnreadCounts(snapshot(2, '10'));
+    useStore.getState().setFolders('acct-1', [{ path: 'INBOX', name: 'INBOX', unread_count: 2, counts_known: true, counts_stale: false, server_counts_at: observedAt, status_attempt_revision: '10' }]);
+  });
+  const inboxBadge = () => {
+    const label = [...document.querySelectorAll('span')].filter(span => span.textContent === 'INBOX').at(-1);
+    const badge = label?.nextElementSibling;
+    return badge?.tagName === 'SPAN' ? badge.textContent : null;
+  };
+  assert.equal(inboxBadge(), '2');
+  await React.act(async () => useStore.getState().decrementUnread('acct-1'));
+  assert.equal(useStore.getState().unreadCounts.byAccount['acct-1'], 1);
+  assert.equal(inboxBadge(), '1', 'archive optimism must reach the actual Inbox row');
+  await React.act(async () => useStore.getState().setFolders('acct-1', [{ path: 'INBOX', name: 'INBOX', unread_count: 2, counts_known: true, counts_stale: false, server_counts_at: observedAt, status_attempt_revision: '10' }]));
+  assert.equal(inboxBadge(), '1', 'an old folder response cannot restore the optimistic decrement');
+  await React.act(async () => useStore.getState().incrementUnread('acct-1'));
+  assert.equal(inboxBadge(), '2', 'Undo restores the badge once');
+  await React.act(async () => useStore.getState().decrementUnread('acct-1', 2));
+  assert.equal(inboxBadge(), null, 'bulk archive reaches zero without a ghost badge');
+  await React.act(async () => useStore.getState().incrementUnread('acct-1'));
+  assert.equal(inboxBadge(), '1', 'partial rollback restores only failed unread');
+  await React.act(async () => {
+    useStore.setState({ pendingCounts: {}, favoriteFolders: [{ accountId: 'acct-1', path: 'INBOX' }] });
+    useStore.getState().setUnreadCounts(snapshot(1, '12'));
+    useStore.getState().setFolders('acct-1', [{ path: 'INBOX', name: 'INBOX', unread_count: 2, counts_known: true, counts_stale: false, server_counts_at: observedAt, status_attempt_revision: '11' }]);
+  });
+  const inboxLabels = [...document.querySelectorAll('span')].filter(span => span.textContent === 'INBOX');
+  assert.ok(inboxLabels.length >= 2, 'favorite and folder tree both render Inbox');
+  assert.ok(inboxLabels.every(span => span.nextElementSibling?.textContent === '1'), 'a newer account snapshot also reaches the favorite');
+  await React.act(async () => {
+    useStore.getState().setFolders('acct-1', [{ path: 'INBOX', name: 'INBOX', unread_count: 3, counts_known: true, counts_stale: false, server_counts_at: observedAt, status_attempt_revision: '13' }]);
+    useStore.getState().setUnreadCounts(snapshot(3, '13'));
+    useStore.getState().setUnreadCounts(snapshot(2, '11'));
+  });
+  assert.equal(inboxBadge(), '3', 'late unread snapshots cannot undo a newer observation');
+  await React.act(async () => { useStore.getState().setLocked(true); root.unmount(); });
+  root = null;
+});

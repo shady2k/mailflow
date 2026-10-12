@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/index.js';
 import { unreadBadge } from '../utils/unreadBadge.js';
+import { displayInboxFolderCounts } from '../utils/inboxFolderCounts.js';
 import { api } from '../utils/api.js';
 import { signOut } from '../utils/signOut.js';
 import { resolveThreadMessages } from '../utils/threadActions.js';
@@ -256,9 +257,9 @@ export default function Sidebar() {
   const { t } = useTranslation();
   const uiScale = useUiScale();
   const {
-    accounts, unreadCounts, selectedAccountId, selectedFolder,
+    accounts, unreadCounts, pendingCounts, selectedAccountId, selectedFolder,
     setSelectedAccount, setShowAdmin, setAdminTab, openCompose,
-    folders, setFolders, setAccounts, user, setUser, lockScreen, sidebarCollapsed: sidebarCollapsedPref, toggleSidebar,
+    folders: serverFolders, setFolders, setAccounts, user, setUser, lockScreen, sidebarCollapsed: sidebarCollapsedPref, toggleSidebar,
     blockRemoteImages, setBlockRemoteImages, setMobileSidebarOpen, addNotification,
     searchAllFolders, setSearchAllFolders,
     hiddenFolders, setHiddenFolders,
@@ -271,6 +272,7 @@ export default function Sidebar() {
     isSidebarResizing,
     showContacts, setShowContacts,
   } = useStore();
+  const folders = useMemo(() => displayInboxFolderCounts(serverFolders, unreadCounts, pendingCounts), [serverFolders, unreadCounts, pendingCounts]);
 
   const isMobile = useMobile();
   // On mobile the sidebar is always expanded (shown as an overlay drawer)
