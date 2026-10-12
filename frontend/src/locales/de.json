@@ -1919,7 +1919,7 @@
     "title": "Suche und Indizierung",
     "description": "Die Volltextsuche umfasst Nachrichten mit geladenen Kopfzeilen. Die Abdeckung wächst, während die Hintergrundindizierung fehlenden Text herunterlädt.",
     "pauseHelp": "Die Pause wird für dieses Konto gespeichert. Ein laufender Download kann enden; E-Mail-Synchronisierung und das Öffnen von Nachrichten funktionieren weiterhin.",
-    "retryHelp": "Nur fehlgeschlagene Downloads werden erneut eingereiht. Suchtext und Nachrichtencache bleiben erhalten. Datenbankindizes aktualisieren sich automatisch; ein lokaler Neuaufbau oder das Leeren des Caches ist nicht nötig.",
+    "retryHelp": "Nur fehlgeschlagene Downloads werden erneut eingereiht. Suchtext und Nachrichtencache bleiben erhalten.",
     "refresh": "Status aktualisieren",
     "refreshing": "Status wird aktualisiert…",
     "updated": "Aktualisiert um {{time}}",

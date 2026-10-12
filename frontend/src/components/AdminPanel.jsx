@@ -8748,6 +8748,7 @@ function makeSearchIndex(t) {
   const secCrumb = `${tabLabel('security')} › ${tabLabel('security')}`;
   const privCrumb = `${tabLabel('security')} › ${tabLabel('privacy')}`;
   return [
+    { label: t('searchIndex.title'), keywords: ['search', 'index', 'indexing', 'pause', 'поиск', 'индексация'], tab: 'search-index', breadcrumb: t('searchIndex.title') },
     // Accounts
     { label: t('admin.accounts.title'), keywords: ['account', 'email', 'imap', 'smtp', 'gmail', 'yahoo', 'icloud', 'password', 'add account', 'connect'], tab: 'accounts', breadcrumb: tabLabel('accounts') },
     { label: t('admin.accounts.signatureSection'), keywords: ['signature', 'sign off', 'footer', 'alias', 'send as'], tab: 'accounts', breadcrumb: tabLabel('accounts') },

@@ -1919,7 +1919,7 @@
     "title": "Recherche et indexation",
     "description": "La recherche intégrale couvre les messages dont les en-têtes sont chargés. La couverture augmente lorsque l’indexation en arrière-plan télécharge le texte manquant.",
     "pauseHelp": "La pause est enregistrée pour ce compte. Un téléchargement en cours peut se terminer ; la synchronisation et l’ouverture des messages restent disponibles.",
-    "retryHelp": "Seuls les téléchargements échoués sont remis en attente. Le texte de recherche et le cache sont conservés. Les index de la base se mettent à jour automatiquement ; aucune reconstruction locale ni suppression du cache n’est nécessaire.",
+    "retryHelp": "Seuls les téléchargements échoués sont remis en attente. Le texte de recherche et le cache sont conservés.",
     "refresh": "Actualiser l’état",
     "refreshing": "Actualisation…",
     "updated": "Actualisé à {{time}}",

@@ -1938,7 +1938,7 @@
     "title": "Wyszukiwanie i indeksowanie",
     "description": "Wyszukiwanie pełnego tekstu obejmuje wiadomości z pobranymi nagłówkami. Zasięg rośnie wraz z pobieraniem brakującego tekstu w tle.",
     "pauseHelp": "Pauza jest zapisywana dla tego konta. Rozpoczęte pobieranie może się zakończyć; synchronizacja i otwieranie wiadomości nadal działają.",
-    "retryHelp": "Do kolejki wracają tylko nieudane pobrania. Tekst wyszukiwania i pamięć podręczna pozostają zachowane. Indeksy bazy aktualizują się automatycznie; lokalna przebudowa ani czyszczenie pamięci nie są potrzebne.",
+    "retryHelp": "Do kolejki wracają tylko nieudane pobrania. Tekst wyszukiwania i pamięć podręczna pozostają zachowane.",
     "refresh": "Odśwież stan",
     "refreshing": "Odświeżanie…",
     "updated": "Zaktualizowano o {{time}}",

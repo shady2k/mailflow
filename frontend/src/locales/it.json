@@ -1919,7 +1919,7 @@
     "title": "Ricerca e indicizzazione",
     "description": "La ricerca nel testo completo comprende i messaggi con intestazioni già caricate. La copertura cresce scaricando il testo mancante in background.",
     "pauseHelp": "La pausa viene salvata per questo account. Un download in corso può terminare; sincronizzazione e apertura dei messaggi restano disponibili.",
-    "retryHelp": "Vengono rimessi in coda solo i download non riusciti. Testo di ricerca e cache restano intatti. Gli indici del database si aggiornano automaticamente; non occorre ricostruirli o svuotare la cache.",
+    "retryHelp": "Vengono rimessi in coda solo i download non riusciti. Testo di ricerca e cache restano intatti.",
     "refresh": "Aggiorna stato",
     "refreshing": "Aggiornamento…",
     "updated": "Aggiornato alle {{time}}",

@@ -1919,7 +1919,7 @@
     "title": "Búsqueda e indexación",
     "description": "La búsqueda de texto completo abarca los mensajes cuyas cabeceras se han cargado. La cobertura aumenta al descargar el texto que falta en segundo plano.",
     "pauseHelp": "La pausa se guarda para esta cuenta. Una descarga activa puede terminar; la sincronización y la apertura de mensajes siguen funcionando.",
-    "retryHelp": "Solo se vuelven a poner en cola las descargas fallidas. Se conservan el texto de búsqueda y la caché. Los índices de la base se actualizan automáticamente; no hace falta reconstruirlos ni vaciar la caché.",
+    "retryHelp": "Solo se vuelven a poner en cola las descargas fallidas. Se conservan el texto de búsqueda y la caché.",
     "refresh": "Actualizar estado",
     "refreshing": "Actualizando…",
     "updated": "Actualizado a las {{time}}",

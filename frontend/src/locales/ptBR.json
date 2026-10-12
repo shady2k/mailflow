@@ -1919,7 +1919,7 @@
     "title": "Pesquisa e indexação",
     "description": "A pesquisa de texto completo abrange mensagens com cabeçalhos já carregados. A cobertura aumenta ao baixar o texto ausente em segundo plano.",
     "pauseHelp": "A pausa é salva para esta conta. Um download em andamento pode terminar; a sincronização e a abertura de mensagens continuam funcionando.",
-    "retryHelp": "Somente downloads com falha voltam à fila. O texto de pesquisa e o cache são preservados. Os índices do banco se atualizam automaticamente; não é necessário reconstruí-los nem limpar o cache.",
+    "retryHelp": "Somente downloads com falha voltam à fila. O texto de pesquisa e o cache são preservados.",
     "refresh": "Atualizar estado",
     "refreshing": "Atualizando o estado…",
     "updated": "Atualizado às {{time}}",

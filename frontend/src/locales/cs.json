@@ -1938,7 +1938,7 @@
     "title": "Hledání a indexování",
     "description": "Fulltextové hledání zahrnuje zprávy s načtenými hlavičkami. Pokrytí roste, když indexování na pozadí stahuje chybějící text.",
     "pauseHelp": "Pozastavení se ukládá pro tento účet. Probíhající stahování může skončit; synchronizace a otevírání zpráv fungují dál.",
-    "retryHelp": "Do fronty se vrátí pouze neúspěšná stahování. Prohledávaný text a mezipaměť se zachovají. Indexy databáze se aktualizují automaticky; místní obnova ani vymazání mezipaměti nejsou potřeba.",
+    "retryHelp": "Do fronty se vrátí pouze neúspěšná stahování. Prohledávaný text a mezipaměť se zachovají.",
     "refresh": "Obnovit stav",
     "refreshing": "Obnovování…",
     "updated": "Aktualizováno v {{time}}",

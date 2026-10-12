@@ -1919,7 +1919,7 @@
     "title": "Search and indexing",
     "description": "Full-body search covers messages whose headers have been loaded. Coverage grows as background indexing downloads the missing text.",
     "pauseHelp": "Pausing is saved for this account. An active download may finish; mail sync and opening messages still work.",
-    "retryHelp": "Retry queues only failed downloads and preserves searchable text and cached messages. Database search indexes update automatically; no local rebuild or cache clearing is needed.",
+    "retryHelp": "Retry queues only failed downloads and preserves searchable text and cached messages.",
     "refresh": "Refresh status",
     "refreshing": "Refreshing…",
     "updated": "Updated at {{time}}",

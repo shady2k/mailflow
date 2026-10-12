@@ -1,9 +1,0 @@
-services:
-  backend:
-    volumes:
-      - ${MAILFLOW_FORK_ROOT:?Set MAILFLOW_FORK_ROOT}/backend/src:/app/src:ro
-      - ${MAILFLOW_FORK_ROOT:?Set MAILFLOW_FORK_ROOT}/backend/migrations:/app/migrations:ro
-      - ${MAILFLOW_FORK_ROOT:?Set MAILFLOW_FORK_ROOT}/scripts:/tests:ro
-  frontend:
-    volumes:
-      - ${MAILFLOW_FORK_ROOT:?Set MAILFLOW_FORK_ROOT}/frontend/dist:/usr/share/nginx/html:ro
