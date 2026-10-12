@@ -1,3 +1,4 @@
+import { formatCalendarDate } from '../utils/formatDate.js';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../utils/api.js';
@@ -639,7 +640,7 @@ function ContactDetail({ contact: c, confirmDelete, saving, error, onEdit, onDel
           )}
           {c.last_sent && (
             <DetailRow label={t('contacts.fields.lastContacted')}>
-              {new Date(c.last_sent).toLocaleDateString()}
+              {formatCalendarDate(c.last_sent)}
             </DetailRow>
           )}
         </DetailSection>

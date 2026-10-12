@@ -1,3 +1,4 @@
+import { formatTimestamp } from './formatDate.js';
 import DOMPurify from 'dompurify';
 
 // Print documents for one message or a whole conversation (#521).
@@ -15,7 +16,7 @@ const fmtAddr = (r) => r.name ? `${esc(r.name)} &lt;${esc(r.email)}&gt;` : esc(r
 const HEAD = (title) => `<!DOCTYPE html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'; base-uri 'none'"><title>${esc(title)}</title>`;
 
 function metaHtml(message) {
-  const date = message.date ? new Date(message.date).toLocaleString() : '';
+  const date = message.date ? formatTimestamp(message.date) : '';
   const fromStr = message.from_name
     ? `${esc(message.from_name)} &lt;${esc(message.from_email)}&gt;`
     : esc(message.from_email);

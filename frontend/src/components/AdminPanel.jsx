@@ -1,5 +1,6 @@
 import AiHeadersEditor from './AiHeadersEditor.jsx';
 import BodyIndexStatus from './BodyIndexStatus.jsx';
+import { formatCalendarDate, formatTimestamp, formatTime } from '../utils/formatDate.js';
 import { useCallback, useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../store/index.js';
@@ -1191,7 +1192,7 @@ function AccountsTab() {
             {[
               ['IMAP', `${account.imap_host}:${account.imap_port}`],
               ['SMTP', `${account.smtp_host}:${account.smtp_port}`],
-              [t('admin.accounts.lastSync'), account.last_sync ? new Date(account.last_sync).toLocaleTimeString() : t('common.never')],
+              [t('admin.accounts.lastSync'), account.last_sync ? formatTime(account.last_sync) : t('common.never')],
             ].map(([label, val]) => (
               <div key={label} style={{ fontSize: 11 }}>
                 <span style={{ color: 'var(--text-tertiary)' }}>{label} </span>
@@ -2480,7 +2481,7 @@ function CardDavCard() {
                 <div style={{ marginTop: 4 }}>
                   {t('admin.integrations.carddav.summary', { contacts: status.contactCount ?? 0, books: status.bookCount ?? 0 })}
                   {' · '}
-                  {t('admin.integrations.carddav.lastSync', { when: status.lastSyncAt ? new Date(status.lastSyncAt).toLocaleString() : t('common.never') })}
+                  {t('admin.integrations.carddav.lastSync', { when: status.lastSyncAt ? formatTimestamp(status.lastSyncAt) : t('common.never') })}
                 </div>
                 {status.lastError && (
                   <div style={{ marginTop: 4, color: 'var(--red, #f87171)' }}>{t('admin.integrations.carddav.syncFailed', { error: status.lastError })}</div>
@@ -4491,7 +4492,7 @@ function AISection() {
                       {cancelling ? t('admin.ai.cancelling') : t('common.cancel')}
                     </button>
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 8 }}>{t('admin.ai.deviceExpires', { time: new Date(pendingDevice.expiresAt).toLocaleTimeString() })}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 8 }}>{t('admin.ai.deviceExpires', { time: formatTime(pendingDevice.expiresAt) })}</div>
                 </div>
               )}
             </div>
@@ -5297,11 +5298,11 @@ function UsersAndInvitesPanel() {
                 )}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
-                {t('admin.users.joined', { date: new Date(u.created_at).toLocaleDateString() })}
+                {t('admin.users.joined', { date: formatCalendarDate(u.created_at) })}
               </div>
               {/* Last request, not last login: sessions roll, so a daily user rarely logs in. */}
               <div
-                title={u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString() : undefined}
+                title={u.lastSeenAt ? formatTimestamp(u.lastSeenAt) : undefined}
                 style={{
                   fontSize: 11, marginTop: 1,
                   color: u.lastSeenAt && daysSince(u.lastSeenAt) > 90 ? 'var(--amber)' : 'var(--text-tertiary)',
@@ -5502,7 +5503,7 @@ function UsersAndInvitesPanel() {
                       {inv.email}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
-                      {t('admin.users.inviteExpires', { date: new Date(inv.expires_at).toLocaleDateString() })}
+                      {t('admin.users.inviteExpires', { date: formatCalendarDate(inv.expires_at) })}
                     </div>
                   </div>
                   <button
@@ -5552,8 +5553,8 @@ function UsersAndInvitesPanel() {
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
                     {inv.used_at
-                      ? t('admin.users.inviteUsedBy', { username: inv.used_by_username || 'unknown', date: new Date(inv.used_at).toLocaleDateString() })
-                      : t('admin.users.inviteExpired', { date: new Date(inv.expires_at).toLocaleDateString() })}
+                      ? t('admin.users.inviteUsedBy', { username: inv.used_by_username || 'unknown', date: formatCalendarDate(inv.used_at) })
+                      : t('admin.users.inviteExpired', { date: formatCalendarDate(inv.expires_at) })}
                   </div>
                 </div>
                 <IconBtn onClick={() => handleRevokeInvite(inv.id)} title={t('admin.users.inviteDelete')} danger>
@@ -8590,7 +8591,7 @@ function SecurityTab() {
                   {authEvents.map(ev => (
                     <tr key={ev.id} style={{ borderBottom: '1px solid var(--border-subtle, var(--border))' }}>
                       <td style={{ padding: '6px 8px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                        {new Date(ev.created_at).toLocaleString()}
+                        {formatTimestamp(ev.created_at)}
                       </td>
                       <td style={{ padding: '6px 8px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
                         {eventLabel(ev.event_type)}

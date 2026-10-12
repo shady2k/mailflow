@@ -1,3 +1,4 @@
+import { formatTimestamp } from './formatDate.js';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import * as compose from './composeFromMessage.js';
@@ -242,7 +243,7 @@ describe('malformed address fields fall back cleanly', () => {
 
 describe('quoted body templates', () => {
   const date = '2026-07-13T10:00:00Z';
-  const when = new Date(date).toLocaleString();
+  const when = formatTimestamp(date);
 
   it('builds the exact reply quoted text and html, sanitizing newlines in the name', async () => {
     const h = harness({ text: 'line1\nline2', html: '<p>Hi</p>' });

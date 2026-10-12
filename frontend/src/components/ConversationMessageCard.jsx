@@ -1,3 +1,4 @@
+import { formatTimestamp } from '../utils/formatDate.js';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../utils/api.js';
 import { useTranslation } from 'react-i18next';
@@ -201,7 +202,7 @@ export default function ConversationMessageCard({ message, expanded, onToggle, o
       shortcutBus.off('printMessage', onPrint);
     };
   }, [selected, expanded, body, message, addNotification, t]);
-  const when = message.date ? new Date(message.date).toLocaleString() : '';
+  const when = message.date ? formatTimestamp(message.date) : '';
   const who = message.from_name || message.from_email || '';
 
   return (
