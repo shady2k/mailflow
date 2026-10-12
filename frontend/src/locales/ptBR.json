@@ -317,6 +317,7 @@
     "backToList": "Voltar à lista"
   },
   "messageList": {
+    "searching": "Pesquisando…",
     "replyDraftChanged": "O rascunho de resposta mudou. Tente abri-lo novamente.",
     "replyDraftKeepCurrent": "Salve a mensagem atual e resolva seus anexos antes de abrir este rascunho.",
     "replyDraftUnavailable": "Este rascunho de resposta não está mais disponível.",

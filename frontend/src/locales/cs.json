@@ -164,6 +164,7 @@
     "updateAvailable": "Je dostupná aktualizace: v{{version}}"
   },
   "messageList": {
+    "searching": "Hledání…",
     "replyDraftChanged": "Koncept odpovědi se změnil. Zkuste jej znovu otevřít.",
     "replyDraftKeepCurrent": "Před otevřením tohoto konceptu uložte aktuální zprávu a vyřešte její přílohy.",
     "replyDraftUnavailable": "Tento koncept odpovědi již není dostupný.",

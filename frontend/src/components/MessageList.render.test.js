@@ -434,3 +434,120 @@ describe('MessageList reply draft indicators', () => {
     assert.equal(container.querySelector('[aria-label="Open reply draft"]'), null);
   });
 });
+
+const { api } = await import('../utils/api.js');
+const pauseSearch = () => React.act(async () => { await new Promise(resolve => setTimeout(resolve, 330)); });
+async function querySearch(query) { await React.act(async () => useStore.getState().setSearchQuery(query)); }
+function deferredSearch() {
+  const calls = [];
+  api.search = (query, account, options) => new Promise((resolve, reject) => calls.push({ query, account, options, resolve, reject }));
+  return calls;
+}
+test('search announces debounce, suppresses empty, rejects stale responses and clear', async () => {
+  await mount({rows: [], threadedView: false});
+  const calls = deferredSearch();
+  await querySearch('first');
+  assert.match(container.textContent, /messageList.searching/);
+  assert.doesNotMatch(container.textContent, /messageList.noSearchResults/);
+  assert.equal(calls.length, 0);
+  await pauseSearch();
+  await querySearch('second'); await pauseSearch();
+  await React.act(async () => calls[0].resolve({messages: [MESSAGE]}));
+  assert.deepEqual(useStore.getState().searchResults, []);
+  assert.equal(useStore.getState().isSearching, true);
+  await React.act(async () => calls[1].resolve({messages: []}));
+  assert.match(container.textContent, /messageList.noSearchResults/);
+  await querySearch('third'); await pauseSearch();
+  await querySearch('');
+  await React.act(async () => calls[2].resolve({messages: [MESSAGE]}));
+  assert.deepEqual(useStore.getState().searchResults, []);
+  assert.equal(useStore.getState().isSearching, false);
+  await querySearch('   ');
+  assert.doesNotMatch(container.textContent, /messageList.noSearchResults/);
+  assert.equal(useStore.getState().isSearching, false);
+  await React.act(async () => root.unmount()); root = null;
+});
+test('search errors are distinct and query/history edits restart feedback', async () => {
+  await mount({rows: [], threadedView: false});
+  const calls = deferredSearch();
+  await querySearch('history'); await pauseSearch();
+  await React.act(async () => calls[0].reject(new Error('Synthetic failure')));
+  assert.match(container.textContent, /Synthetic failure/);
+  assert.doesNotMatch(container.textContent, /messageList.noSearchResultsDesc/);
+  await querySearch('new');
+  assert.doesNotMatch(container.textContent, /Synthetic failure/);
+  assert.match(container.textContent, /messageList.searching/);
+  await querySearch('');
+  await React.act(async () => root.unmount()); root = null;
+});
+test('same-query account and folder navigation reject prior requests and pages', async () => {
+  await mount({rows: [], threadedView: false});
+  await React.act(async () => useStore.setState({searchAllFolders: false, scrollMode: 'infinite', pageSize: 25}));
+  const calls = deferredSearch();
+  await querySearch('same'); await pauseSearch();
+  await React.act(async () => useStore.setState({selectedAccountId: 'acct-2'}));
+  await pauseSearch();
+  await React.act(async () => calls[0].resolve({messages: [MESSAGE]}));
+  assert.deepEqual(useStore.getState().searchResults, []);
+  const page = Array.from({length: 25}, (_, i) => ({...MESSAGE, id: `synthetic-${i}`}));
+  await React.act(async () => calls[1].resolve({messages: page}));
+  const loadMore = [...container.querySelectorAll('button')].find(b => b.textContent === 'messageList.loadMore');
+  assert.ok(loadMore);
+  await React.act(async () => loadMore.click());
+  await React.act(async () => useStore.setState({selectedFolder: 'Archive'}));
+  await pauseSearch();
+  await React.act(async () => calls[2].resolve({messages: [MESSAGE]}));
+  assert.deepEqual(useStore.getState().searchResults, []);
+  assert.equal(useStore.getState().isSearching, true);
+  await React.act(async () => calls[3].resolve({messages: []}));
+  assert.equal(useStore.getState().isSearching, false);
+  await React.act(async () => root.unmount()); root = null;
+});
+
+test('fast typing coalesces requests and stale errors cannot replace latest results', async () => {
+  await mount({rows: [], threadedView: false});
+  const calls = deferredSearch();
+  await querySearch('a'); await querySearch('ab'); await querySearch('abc');
+  await pauseSearch(); assert.equal(calls.length, 1); assert.equal(calls[0].query, 'abc');
+  await querySearch('latest'); await pauseSearch();
+  await React.act(async () => calls[1].resolve({messages: [MESSAGE]}));
+  await React.act(async () => calls[0].reject(new Error('Stale failure')));
+  assert.equal(useStore.getState().searchResults.length, 1);
+  assert.doesNotMatch(container.textContent, /Stale failure/);
+  await React.act(async () => root.unmount()); root = null;
+});
+test('pagination errors preserve results and offer a localized retry', async () => {
+  await mount({rows: [], threadedView: false});
+  await React.act(async () => useStore.setState({scrollMode: 'infinite', pageSize: 1}));
+  const calls = deferredSearch();
+  await querySearch('page'); await pauseSearch();
+  await React.act(async () => calls[0].resolve({messages: [MESSAGE]}));
+  const more = [...container.querySelectorAll('button')].find(b => b.textContent === 'messageList.loadMore');
+  await React.act(async () => more.click());
+  await React.act(async () => calls[1].reject(new Error('Page failure')));
+  assert.equal(useStore.getState().searchResults.length, 1);
+  const retry = [...container.querySelectorAll('button')].find(b => b.textContent === 'common.retry');
+  assert.ok(retry); assert.match(container.querySelector('[role="status"]').textContent, /messageList.searchFailed/);
+  await React.act(async () => retry.click());
+  assert.equal(calls[2].options.offset, 1);
+  await React.act(async () => calls[2].resolve({messages: []}));
+  assert.doesNotMatch(container.querySelector('[role="status"]').textContent, /messageList.searchFailed/);
+  await React.act(async () => root.unmount()); root = null;
+});
+
+test('history restore starts a new search generation and ignores the interrupted response', async () => {
+  await mount({rows: [], threadedView: false});
+  const calls = deferredSearch();
+  await querySearch('interrupted'); await pauseSearch();
+  const { createInboxNavigation } = await import('../utils/inboxNavigation.js');
+  const navigation = createInboxNavigation({ history: window.history, capture: () => ({}), select: () => {},
+    restore: snapshot => useStore.setState(snapshot.view) });
+  await React.act(async () => navigation.pop({mailflowInbox:{messageId:null,list:{view:{searchQuery:'restored',selectedFolder:'Archive'}}}}));
+  assert.match(container.querySelector('[role="status"]').textContent, /messageList.searching/);
+  await pauseSearch();
+  await React.act(async () => calls[0].resolve({messages:[MESSAGE]}));
+  assert.deepEqual(useStore.getState().searchResults, []);
+  await React.act(async () => calls[1].resolve({messages:[]}));
+  assert.equal(useStore.getState().isSearching, false);
+  await React.act(async () => root.unmount()); root = null;
+});

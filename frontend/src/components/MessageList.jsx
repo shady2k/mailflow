@@ -568,8 +568,12 @@ export default function MessageList() {
   }, [selectedAccountId, selectedFolder, unreadOnly, activeCategory, searchQuery, categorizationEnabled, selectedAccount?.categorization_enabled, applyReadGuard, setHasMoreMessages, setMessages, setMessagesOffset, setMessagesTotal]);
 
   // Search
-  useEffect(() => {
+  useLayoutEffect(() => {
     clearTimeout(searchTimer.current);
+    const sequence = searchSeq;
+    const seq = ++sequence.current;
+    setSearchLoadingMore(false);
+    setSearchResults([]);
     if (!searchQuery.trim()) {
       setIsSearching(false);
       setSearchResults([]);
@@ -581,7 +585,6 @@ export default function MessageList() {
     setIsSearching(true);
     setSearchHasMore(false);
     setSearchError(null);
-    const seq = ++searchSeq.current;
     searchTimer.current = setTimeout(async () => {
       try {
         const data = await api.search(searchQuery, selectedAccountId || undefined, { offset: 0, limit: searchPageSize, folder: searchFolder });
@@ -603,7 +606,10 @@ export default function MessageList() {
         if (searchSeq.current === seq) setIsSearching(false);
       }
     }, 300);
-    return () => clearTimeout(searchTimer.current);
+    return () => {
+      clearTimeout(searchTimer.current);
+      ++sequence.current;
+    };
   }, [searchQuery, selectedAccountId, searchFolder, searchPageSize, searchReloadToken, unifiedInboxAccountKey, applyReadGuard, setIsSearching, setSearchResults]);
 
   // Re-run an active search (and refresh the folder view) after inbox rules run, since
@@ -623,31 +629,34 @@ export default function MessageList() {
   }, []);
 
   const loadMoreSearch = useCallback(async () => {
-    if (searchLoadingMore) return;
+    if (searchLoadingMore || isSearching || !searchQuery.trim()) return;
+    const seq = searchSeq.current;
     const qSnapshot = searchQuery; // capture before async gap
     setSearchLoadingMore(true);
+    setSearchError(null);
     try {
       const offset = searchFetchedOffsetRef.current;
       const data = await api.search(qSnapshot, selectedAccountId || undefined, { offset, limit: searchPageSize, folder: searchFolder });
       // Discard results if the query changed while we were fetching
-      if (useStore.getState().searchQuery !== qSnapshot) return;
+      if (searchSeq.current !== seq || useStore.getState().searchQuery !== qSnapshot) return;
       searchFetchedOffsetRef.current = offset + data.messages.length;
       const current = useStore.getState().searchResults;
       useStore.setState({ searchResults: [...current, ...applyReadGuard(data.messages)] });
       setSearchHasMore(data.messages.length === searchPageSize);
     } catch (err) {
-      console.error('Search load more failed:', err);
+      if (searchSeq.current === seq) setSearchError(err.message || 'Search failed');
     } finally {
-      setSearchLoadingMore(false);
+      if (searchSeq.current === seq) setSearchLoadingMore(false);
     }
-  }, [searchQuery, selectedAccountId, searchFolder, searchPageSize, searchLoadingMore, applyReadGuard]);
+  }, [searchQuery, selectedAccountId, searchFolder, searchPageSize, searchLoadingMore, isSearching, applyReadGuard]);
 
   const prefetchSearchAfterRemoval = useCallback(async (offset) => {
     const qSnapshot = useStore.getState().searchQuery;
-    if (!qSnapshot.trim()) return;
+    if (!qSnapshot.trim() || useStore.getState().isSearching) return;
+    const seq = searchSeq.current;
     try {
       const data = await api.search(qSnapshot, selectedAccountId || undefined, { offset, limit: searchPageSize, folder: searchFolder });
-      if (useStore.getState().searchQuery !== qSnapshot) return;
+      if (searchSeq.current !== seq || useStore.getState().searchQuery !== qSnapshot) return;
       searchFetchedOffsetRef.current = Math.max(searchFetchedOffsetRef.current, offset + data.messages.length);
       const additions = applyReadGuard(data.messages);
       if (!additions.length) {
@@ -3438,10 +3447,21 @@ export default function MessageList() {
         </div>
       )}
 
+      <div role="status" aria-live="polite" aria-atomic="true" style={{ height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 14px', fontSize: 12, color: 'var(--text-secondary)' }}>
+        {searchQuery.trim() && (isSearching || searchLoadingMore) && <>
+          <span className="search-spinner" aria-hidden="true" />
+          <span>{t('messageList.searching')}</span>
+        </>}
+        {searchQuery.trim() && !isSearching && !searchLoadingMore && searchError && displayMessages.length > 0 && <>
+          <span>{t('messageList.searchFailed')}</span>
+          <button onClick={loadMoreSearch} style={{ color: 'var(--accent)', background: 'none', border: 0, cursor: 'pointer' }}>{t('common.retry')}</button>
+        </>}
+      </div>
       {/* Message list */}
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
         <div
           ref={listRef}
+          aria-busy={Boolean(searchQuery.trim() && (isSearching || searchLoadingMore))}
           data-mailflow-list-scroll
           data-mailflow-list-loading={loadingMessages || isSearching || searchLoadingMore}
           onScroll={handleScroll}
@@ -3558,7 +3578,7 @@ export default function MessageList() {
           </div>
         )}
 
-        {loadingMessages && displayMessages.length === 0 && (
+        {loadingMessages && !searchQuery.trim() && displayMessages.length === 0 && (
           <div>
             {Array.from({ length: 7 }).map((_, i) => (
               <div key={i} style={{
@@ -3577,10 +3597,10 @@ export default function MessageList() {
           </div>
         )}
 
-        {!loadingMessages && displayMessages.length === 0 && (
+        {!(loadingMessages && !searchQuery.trim()) && !isSearching && !searchLoadingMore && displayMessages.length === 0 && (
           <EmptyState
-            folderSyncing={folderSyncing}
-            searchQuery={searchQuery}
+            folderSyncing={folderSyncing && !searchQuery.trim()}
+            searchQuery={searchQuery.trim()}
             searchError={searchError}
             unreadOnly={unreadOnly}
             selectedFolder={selectedFolder}
@@ -4038,14 +4058,12 @@ export default function MessageList() {
             {searchLoadingMore && (
               <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 12 }}>
                 <div style={{
-                  width: 16, height: 16, margin: '0 auto 6px',
-                  border: '2px solid var(--border)', borderTopColor: 'var(--accent)',
-                  borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block',
-                }} />
+                  margin: '0 auto 6px',
+                }} className="search-spinner" aria-hidden="true" />
                 <div>{t('common.loading')}</div>
               </div>
             )}
-            {!searchLoadingMore && searchHasMore && displayMessages.length > 0 && (
+            {!isSearching && !searchLoadingMore && searchHasMore && displayMessages.length > 0 && (
               <div style={{ padding: '12px 16px', textAlign: 'center' }}>
                 <button
                   onClick={loadMoreSearch}
@@ -4062,7 +4080,7 @@ export default function MessageList() {
                 </button>
               </div>
             )}
-            {!searchLoadingMore && !searchHasMore && displayMessages.length > 0 && (
+            {!isSearching && !searchLoadingMore && !searchHasMore && displayMessages.length > 0 && (
               <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 11 }}>
                 {t('messageList.noMoreMessages')}
               </div>

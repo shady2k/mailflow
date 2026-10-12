@@ -317,6 +317,7 @@
     "backToList": "Zurück zur Liste"
   },
   "messageList": {
+    "searching": "Suche…",
     "replyDraftChanged": "Der Antwortentwurf wurde geändert. Öffne ihn erneut.",
     "replyDraftKeepCurrent": "Speichere die aktuelle Nachricht und kläre ihre Anhänge, bevor du diesen Entwurf öffnest.",
     "replyDraftUnavailable": "Dieser Antwortentwurf ist nicht mehr verfügbar.",

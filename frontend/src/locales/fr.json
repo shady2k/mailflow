@@ -317,6 +317,7 @@
     "backToList": "Retour à la liste"
   },
   "messageList": {
+    "searching": "Recherche…",
     "replyDraftChanged": "Le brouillon de réponse a changé. Essayez de le rouvrir.",
     "replyDraftKeepCurrent": "Enregistrez le message actuel et gérez ses pièces jointes avant d’ouvrir ce brouillon.",
     "replyDraftUnavailable": "Ce brouillon de réponse n’est plus disponible.",

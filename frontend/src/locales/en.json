@@ -317,6 +317,7 @@
     "backToList": "Back to list"
   },
   "messageList": {
+    "searching": "Searching…",
     "replyDraftChanged": "The reply draft changed. Try opening it again.",
     "replyDraftKeepCurrent": "Save the current message and resolve its attachments before opening this draft.",
     "replyDraftUnavailable": "This reply draft is no longer available.",

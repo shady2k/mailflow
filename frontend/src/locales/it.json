@@ -317,6 +317,7 @@
     "backToList": "Torna all’elenco"
   },
   "messageList": {
+    "searching": "Ricerca…",
     "replyDraftChanged": "La bozza di risposta è cambiata. Prova ad aprirla di nuovo.",
     "replyDraftKeepCurrent": "Salva il messaggio attuale e gestisci i suoi allegati prima di aprire questa bozza.",
     "replyDraftUnavailable": "Questa bozza di risposta non è più disponibile.",

@@ -317,6 +317,7 @@
     "backToList": "Volver a la lista"
   },
   "messageList": {
+    "searching": "Buscando…",
     "replyDraftChanged": "El borrador de respuesta ha cambiado. Intenta abrirlo de nuevo.",
     "replyDraftKeepCurrent": "Guarda el mensaje actual y resuelve sus adjuntos antes de abrir este borrador.",
     "replyDraftUnavailable": "Este borrador de respuesta ya no está disponible.",

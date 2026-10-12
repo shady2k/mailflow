@@ -590,7 +590,7 @@ export const useStore = create((set, get) => ({
   })),
   closeAllMessageWindows: () => set({ messageWindows: [] }),
   searchQuery: '',
-  setSearchQuery: (q) => set(state => q === state.searchQuery ? {} : { searchQuery: q,
+  setSearchQuery: (q) => set(state => q === state.searchQuery ? {} : { searchQuery: q, isSearching: Boolean(q.trim()), searchResults: [],
     replyDrafts: {}, replyDraftRevision: state.replyDraftRevision + 1 }),
   isSearching: false,
   setIsSearching: (v) => set({ isSearching: v }),
