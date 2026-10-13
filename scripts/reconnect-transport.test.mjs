@@ -29,7 +29,7 @@ test('real transport recovers backend restart, session failures and missed data 
   const originalTimeout = globalThis.setTimeout, originalInterval = globalThis.setInterval;
   let server, wss, port, mode = 'healthy', authFailures = 0, upgrades = 0, revision = 1;
   let httpFailure = false, pending = false, slowList = null, messageReads = 0;
-  let countFixture = null, releaseWrite, writeArrived = false;
+  let countFixture = null, countSequenceOffset = 0, releaseWrite, writeArrived = false;
   const stalledUpgrades = new Set();
   const phases = [], reconnectDelays = [], attempts = [], applied = [];
   const start = async () => {
@@ -42,7 +42,7 @@ test('real transport recovers backend restart, session failures and missed data 
       if (httpFailure) { res.writeHead(503); res.end('{"error":"Synthetic outage"}'); return; }
       const reply = () => {
         res.setHeader('Content-Type', 'application/json');
-        if (req.url.includes('unread')) res.end(JSON.stringify(countFixture || { byAccount: { synthetic: revision }, snapshots: { synthetic: { known: true, stale: false, revision: String(revision), observedAt: new Date().toISOString() } } }));
+        if (req.url.includes('unread')) res.end(JSON.stringify(countFixture || { byAccount: { synthetic: revision }, snapshots: { synthetic: { known: true, stale: false, revision: String(countSequenceOffset + revision), observedAt: new Date().toISOString() } } }));
         else res.end(JSON.stringify({ revision, rows: Array.from({ length: revision }, (_, i) => ({ id: `synthetic-${i}` })) }));
       };
       if (req.url === '/messages' && slowList) slowList.push(reply); else reply();
@@ -115,7 +115,7 @@ test('real transport recovers backend restart, session failures and missed data 
       assert.notEqual(useStore.getState().connectionStatus.phase, 'healthy');
       return;
     }
-    await wait(() => authFailures >= 3, 'actual repeated 1011 failures');
+    await wait(() => authFailures >= 3 && reconnectDelays.some(delay => delay >= 4000 && delay <= 5200), 'actual repeated 1011 closes schedule increasing backoff');
     if (process.env.MAILFLOW_RECONNECT_SCENARIO === 'backoff') assert.ok(reconnectDelays.some(delay => delay >= 4000 && delay <= 5200), 'real1011 failures must increase backoff');
     assert.equal(phases.includes('healthy'), false, 'upgrade must never signal authentication success');
     assert.ok(reconnectDelays.some(delay => delay >= 4000 && delay <= 5200), 'actual session-store failures preserve exponential backoff');
@@ -188,47 +188,51 @@ test('real transport recovers backend restart, session failures and missed data 
     await sw('message', { type: 'mailflow:badge', total: 0, enabled: true });
     await sw('message', { type: 'mailflow:badge', total: 1, enabled: true });
     assert.deepEqual(badgeWrites, [1, 0, 1]);
-    stopSync(); stopSync = null; await tab.terminate(); tab = null; countFixture = null;
+    stopSync(); stopSync = null; await tab.terminate(); tab = null; countFixture = null; countSequenceOffset = 100;
     console.log(JSON.stringify({ jointMutation: true, realHTTPPost: true, realBroadcastChannel: true, serviceWorkerBadgeCalls: badgeWrites, tabEvents }));
 
 
     const beforeSuspend = ref.current;
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
     await React.act(async () => document.dispatchEvent(new window.Event('visibilitychange')));
+    revision = 3;
     await new Promise(resolve => originalTimeout(resolve, 1050));
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     await React.act(async () => document.dispatchEvent(new window.Event('visibilitychange')));
-    await wait(() => ref.current !== beforeSuspend && useStore.getState().connectionStatus.phase === 'healthy', 'mobile suspend/resume repairs real OPEN socket without offline/online');
+    await wait(() => ref.current !== beforeSuspend && useStore.getState().connectionStatus.phase === 'healthy'
+      && useStore.getState().messages.length === 3 && useStore.getState().unreadCounts.byAccount.synthetic === 3,
+      'same mounted PWA restores missed rows/counts after suspend without offline/online or reload');
+    console.log(JSON.stringify({ suspendRecovery: true, remounted: false, reloaded: false, rows: useStore.getState().messages.length, unread: useStore.getState().unreadCounts.byAccount.synthetic }));
 
     // A fresh-looking OPEN socket after a hidden offline/online cycle also needs
     // reconciliation; waiting 75 seconds would leave missed data visible as healthy.
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
-    await event('offline'); revision = 3; await event('online');
+    await event('offline'); revision = 4; await event('online');
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     await event('focus');
-    await wait(() => useStore.getState().messages.length === 3 && useStore.getState().connectionStatus.phase === 'healthy', 'hidden online survives until focus');
+    await wait(() => useStore.getState().messages.length === 4 && useStore.getState().connectionStatus.phase === 'healthy', 'hidden online survives until focus');
 
     // Live transport does not mean successful HTTP catch-up.
     httpFailure = true; await event('online');
     await wait(() => useStore.getState().connectionStatus.phase === 'refreshError', 'HTTP failure keeps recovery warning');
-    assert.equal(useStore.getState().messages.length, 3);
-    httpFailure = false; pending = true; revision = 4; const beforePending = messageReads;
+    assert.equal(useStore.getState().messages.length, 4);
+    httpFailure = false; pending = true; revision = 5; const beforePending = messageReads;
     await wait(() => messageReads > beforePending && useStore.getState().connectionStatus.phase === 'refreshError', 'pending mutation defers success');
     pending = false;
-    await wait(() => useStore.getState().messages.length === 4 && useStore.getState().connectionStatus.phase === 'healthy', 'settled mutation permits automatic retry');
+    await wait(() => useStore.getState().messages.length === 5 && useStore.getState().connectionStatus.phase === 'healthy', 'settled mutation permits automatic retry');
 
     // A slow obsolete generation cannot apply after a newer connection refresh.
-    slowList = []; revision = 5; await event('online');
+    slowList = []; revision = 6; await event('online');
     await wait(() => slowList.length > 0, 'slow HTTP request reaches real server');
-    const releaseOld = slowList; slowList = null; revision = 6;
+    const releaseOld = slowList; slowList = null; revision = 7;
     await event('online');
-    await wait(() => useStore.getState().messages.length === 6 && useStore.getState().connectionStatus.phase === 'healthy', 'new generation settles');
+    await wait(() => useStore.getState().messages.length === 7 && useStore.getState().connectionStatus.phase === 'healthy', 'new generation settles');
     for (const release of releaseOld) release(); await tick();
-    assert.equal(useStore.getState().messages.length, 6);
+    assert.equal(useStore.getState().messages.length, 7);
 
     // Sleep/stale OPEN recovery replaces the real socket without a close handshake.
-    const stale = ref.current; stale._lastActivity = Date.now() - 80000; revision = 7; await event('focus');
-    await wait(() => ref.current !== stale && useStore.getState().messages.length === 7 && useStore.getState().connectionStatus.phase === 'healthy', 'stale OPEN repairs and reconciles');
+    const stale = ref.current; stale._lastActivity = Date.now() - 80000; revision = 8; await event('focus');
+    await wait(() => ref.current !== stale && useStore.getState().messages.length === 8 && useStore.getState().connectionStatus.phase === 'healthy', 'stale OPEN repairs and reconciles');
 
     mode = 'upgradeSlow'; await event('online');
     const connecting = ref.current;
