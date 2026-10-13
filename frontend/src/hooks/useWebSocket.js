@@ -71,8 +71,13 @@ export function useWebSocket() {
         if (!current() || useStore.getState().user?.id !== state.user?.id) return false;
         useStore.getState().setUnreadCounts(counts);
         folderAccounts.forEach((id, index) => useStore.getState().setFolders(id, folders[index]));
-        return counts.complete !== false && countWriteState().pending === 0
-          && Object.keys(useStore.getState().pendingCounts).length === 0;
+        const writes = countWriteState().pending;
+        const projections = Object.keys(useStore.getState().pendingCounts).length;
+        const complete = counts.complete !== false && writes === 0 && projections === 0;
+        if (!complete) recordDiagEvent({ category: 'ws', type: 'counts_deferred',
+          cause: counts.complete === false ? 'stale_snapshot' : writes ? 'pending_write' : 'pending_projection',
+          writes, projections });
+        return complete;
       }),
       new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Refresh timeout')), 30000); }),
     ]);

@@ -1,3 +1,4 @@
+import { recordDiagEvent } from './diagEvents.js';
 import { beginCategoryRequest } from './categoryMutations.js';
 import { beginCountWrite, countWriteState } from './countWrites.js';
 const BASE = '/api';
@@ -324,9 +325,18 @@ export const api = {
   deleteAlias: (accountId, aliasId) => request('DELETE', `/accounts/${accountId}/aliases/${aliasId}`),
 
   // Mail
-  getMessages: (params) => {
+  getMessages: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
-    return request('GET', `/mail/messages?${qs}`);
+    return request('GET', `/mail/messages?${qs}`).then(data => {
+      recordDiagEvent({ category: 'list', type: 'page', limit: Number(params.limit) || 50,
+        offset: Number(params.offset) || 0, rows: data.messages?.length || 0,
+        total: data.total, nextOffset: data.nextOffset, hasMore: data.hasMore,
+        threaded: params.threaded === true || params.threaded === 'true', unreadOnly: params.unreadOnly === true || params.unreadOnly === 'true' });
+      return data;
+    }).catch(error => {
+      recordDiagEvent({ category: 'list', type: 'page_failed', status: Number(error.status) || 0 });
+      throw error;
+    });
   },
   getMessage: (id) => request('GET', `/mail/messages/${id}`),
   // Resolve a deep-link reference (stable Message-ID header, or a legacy UUID) to the

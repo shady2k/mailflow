@@ -1,3 +1,4 @@
+import { recordDiagEvent } from './diagEvents.js';
 const tasks = new Map();
 let revision = 0;
 
@@ -16,9 +17,15 @@ export async function refreshConnectionData(isCurrent, refreshCounts) {
   while (isCurrent()) {
     const scopeRevision = revision;
     if (!tasks.has('messages') || !tasks.has('categories')) throw new Error('Messages unavailable');
-    const results = await Promise.allSettled([refreshCounts(), ...[...tasks.values()].map(task => task(isCurrent))]);
+    const consumers = [['counts', refreshCounts], ...tasks];
+    const results = await Promise.allSettled(consumers.map(([, task]) => task(isCurrent)));
     if (!isCurrent()) return false;
     if (scopeRevision !== revision) continue;
+    results.forEach((result, index) => {
+      if (result.status === 'rejected' || result.value === false) recordDiagEvent({ category: 'ws',
+        type: result.status === 'rejected' ? 'refresh_failed' : 'refresh_deferred',
+        cause: consumers[index][0], status: Number(result.reason?.status) || 0 });
+    });
     const failure = results.find(result => result.status === 'rejected');
     if (failure) throw failure.reason;
     if (results.some(result => result.value === false)) throw new Error('Refresh superseded');
