@@ -1,4 +1,3 @@
-import { formatTimestamp } from '../utils/formatDate.js';
 // Characterization test for the reply / reply-all / forward drafts MessagePane builds.
 //
 // Written BEFORE moving that logic onto the shared composeFromMessage util, so the payload
@@ -149,7 +148,7 @@ const emit = async (action) => {
   return drafts[0];
 };
 
-const DATE_STR = formatTimestamp(MSG.date);
+const DATE_STR = new Date(MSG.date).toLocaleString();
 
 describe('reply', () => {
   test('addresses the Reply-To, not the From', async () => {

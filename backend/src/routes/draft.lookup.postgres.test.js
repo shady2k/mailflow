@@ -36,7 +36,8 @@ describe.skipIf(!process.env.MAILFLOW_TEST_DATABASE_URL)('cached reply indicator
         ADD is_read boolean DEFAULT false, ADD is_starred boolean DEFAULT false,
         ADD has_attachments boolean DEFAULT false, ADD category text, ADD list_unsubscribe text,
         ADD list_unsubscribe_post text, ADD delivery_addresses jsonb, ADD spam_verdict text,
-        ADD spam_user_override text, ADD spam_score_ml real;
+        ADD spam_user_override text, ADD spam_score_ml real,
+        ADD body_text text, ADD search_body_text text, ADD body_indexed_at timestamptz;
       CREATE TEMP TABLE contacts (id uuid, user_id text, primary_email text, photo_data text)`);
     query.mockImplementation((sql, values) => database.query(sql, values));
     const app = express();

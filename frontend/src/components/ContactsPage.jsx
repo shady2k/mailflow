@@ -1,10 +1,10 @@
-import { formatCalendarDate } from '../utils/formatDate.js';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../utils/api.js';
 import { useStore } from '../store/index.js';
 import { useMobile } from '../hooks/useMobile.js';
 import SenderAvatarImage from './SenderAvatarImage.jsx';
+import { formatDay } from '../utils/formatDate.js';
 
 // Deterministic avatar color from a string
 function avatarColor(str) {
@@ -640,7 +640,7 @@ function ContactDetail({ contact: c, confirmDelete, saving, error, onEdit, onDel
           )}
           {c.last_sent && (
             <DetailRow label={t('contacts.fields.lastContacted')}>
-              {formatCalendarDate(c.last_sent)}
+              {formatDay(c.last_sent)}
             </DetailRow>
           )}
         </DetailSection>

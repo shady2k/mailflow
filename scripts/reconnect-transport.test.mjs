@@ -192,6 +192,14 @@ test('real transport recovers backend restart, session failures and missed data 
     console.log(JSON.stringify({ jointMutation: true, realHTTPPost: true, realBroadcastChannel: true, serviceWorkerBadgeCalls: badgeWrites, tabEvents }));
 
 
+    const beforeSuspend = ref.current;
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    await React.act(async () => document.dispatchEvent(new window.Event('visibilitychange')));
+    await new Promise(resolve => originalTimeout(resolve, 1050));
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    await React.act(async () => document.dispatchEvent(new window.Event('visibilitychange')));
+    await wait(() => ref.current !== beforeSuspend && useStore.getState().connectionStatus.phase === 'healthy', 'mobile suspend/resume repairs real OPEN socket without offline/online');
+
     // A fresh-looking OPEN socket after a hidden offline/online cycle also needs
     // reconciliation; waiting 75 seconds would leave missed data visible as healthy.
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });

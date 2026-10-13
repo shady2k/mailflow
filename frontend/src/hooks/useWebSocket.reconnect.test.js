@@ -1,9 +1,11 @@
 import { test } from 'node:test';
+import process from 'node:process';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { JSDOM } from 'jsdom';
 registerHooks({ load(url, context, nextLoad) {
+  if (process.env.MAILFLOW_WEBSOCKET_BASELINE && url.endsWith('/hooks/useWebSocket.js')) return { format: 'module', source: readFileSync(process.env.MAILFLOW_WEBSOCKET_BASELINE, 'utf8'), shortCircuit: true };
   return url.endsWith('.json') ? { format: 'module', source: `export default ${readFileSync(new URL(url), 'utf8')}`, shortCircuit: true } : nextLoad(url, context);
 } });
 const dom = new JSDOM('<div id="root"></div>', { url: 'https://mail.example.invalid', pretendToBeVisual: true });
@@ -234,6 +236,32 @@ test('hidden online is remembered until visible focus even with a fresh OPEN soc
   } finally {
     await React.act(async () => root.unmount());
     unregisterMessages(); unregisterCategories(); api.getUnreadCounts = originalCounts;
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+  }
+});
+
+test('mobile suspend/resume repairs a fresh-looking OPEN without network events', async () => {
+  const root = createRoot(document.getElementById('root'));
+  const originalCounts = api.getUnreadCounts, originalNow = Date.now;
+  let now = originalNow(); Date.now = () => now;
+  api.getUnreadCounts = async () => ({ byAccount: {} });
+  const removeMessages = registerConnectionRefresh('messages', async () => true);
+  const removeCategories = registerConnectionRefresh('categories', async () => true);
+  try {
+    await React.act(async () => root.render(React.createElement(App)));
+    socket.readyState = WebSocket.OPEN; await React.act(async () => confirm(socket));
+    const before = socket;
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    await React.act(async () => document.dispatchEvent(new window.Event('visibilitychange')));
+    now += 5000;
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    await React.act(async () => document.dispatchEvent(new window.Event('visibilitychange')));
+    assert.notEqual(socket, before, 'suspended OPEN must be replaced before 75s heartbeat expiry');
+    socket.readyState = WebSocket.OPEN; await React.act(async () => confirm(socket));
+    assert.equal(useStore.getState().connectionStatus.phase, 'healthy');
+  } finally {
+    await React.act(async () => root.unmount()); Date.now = originalNow;
+    api.getUnreadCounts = originalCounts; removeMessages(); removeCategories();
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
   }
 });

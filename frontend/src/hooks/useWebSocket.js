@@ -44,6 +44,7 @@ export function useWebSocket() {
   const mountedRef = useRef(true);
   const authBlocked = useRef(false);
   const needsCatchUp = useRef(false);
+  const hiddenSince = useRef(document.visibilityState === 'hidden' ? Date.now() : null);
   const reconnectAttempt = useRef(0);
   const refreshGeneration = useRef(0);
   const refreshTimer = useRef(null);
@@ -468,8 +469,15 @@ export function useWebSocket() {
   // instead of waiting out the reconnect backoff or a suspended heartbeat.
   useEffect(() => {
     const revive = (event) => {
-      if (event?.type === 'online') needsCatchUp.current = true;
-      if (document.visibilityState !== 'visible') return;
+      if (event?.type === 'online' || event?.persisted) needsCatchUp.current = true;
+      if (document.visibilityState !== 'visible') {
+        if (hiddenSince.current === null) hiddenSince.current = Date.now();
+        return;
+      }
+      if (hiddenSince.current !== null) {
+        if (Date.now() - hiddenSince.current >= 1000) needsCatchUp.current = true;
+        hiddenSince.current = null;
+      }
       const ws = wsRef.current;
       if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING ||
           (ws.readyState === WebSocket.OPEN && (needsCatchUp.current || event?.type === 'online' || event?.persisted ||

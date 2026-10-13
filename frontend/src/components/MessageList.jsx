@@ -38,6 +38,7 @@ import SpamBadge from './SpamBadge.jsx';
 import ReplyDraftIndicator from './ReplyDraftIndicator.jsx';
 import SpamExplainModal from './SpamExplainModal.jsx';
 import { shortcutBus } from '../utils/shortcutBus.js';
+import { fetchMessageWindow } from '../utils/messageWindow.js';
 import { createLatestRequest } from '../utils/latestRequest.js';
 import { pendingMarkReadMap, completedMarkReadMap, setPending } from '../utils/pendingReads.js';
 import { applyDeleteGuard, clearDeleteGuard, clearPendingDelete, setCompletedDelete, setPendingDelete, threadDeleteGuardKey } from '../utils/pendingDeletes.js';
@@ -351,7 +352,10 @@ export default function MessageList() {
     };
   }, [categorizationActive, selectedAccountId, selectedFolder, messagesRefreshToken, unifiedInboxAccountKey, selectedAccount?.enabled, user?.id, setCategoryCounts]);
 
+  // Bumped by every new search, by clearing the query, and by a change of account or folder, so a
+  // response (or a page of more results) that arrives after any of them is dropped (#592).
   const searchSeq = useRef(0);
+  const loadingSequence = useRef(0);
   const refreshRequestRef = useRef(null);
   if (refreshRequestRef.current === null) refreshRequestRef.current = createLatestRequest();
   // Bumped to force the search effect to re-run (e.g. after rules move messages) so an
@@ -451,6 +455,7 @@ export default function MessageList() {
       // resolves, finds no account IDs, and returns empty — causing the blank
       // "All Inboxes" on first load.
       if (!accountsReady) return;
+      const loadingGeneration = ++loadingSequence.current;
       setLoadingMessages(true);
       setMessagesOffset(0);
       setHasMoreMessages(true);
@@ -501,7 +506,7 @@ export default function MessageList() {
         console.error('Failed to load messages:', err);
         setFolderSyncing(false);
       } finally {
-        if (!cancelled) setLoadingMessages(false);
+        if (!cancelled && loadingGeneration === loadingSequence.current) setLoadingMessages(false);
       }
     };
     run();
@@ -511,6 +516,7 @@ export default function MessageList() {
   // Load next page (called by scroll or button)
   const loadMore = useCallback(async () => {
     if (loadingMessages || !hasMoreMessages) return;
+    const loadingGeneration = ++loadingSequence.current;
     setLoadingMessages(true);
     try {
       // Read current offset directly from store to avoid stale closure
@@ -523,14 +529,18 @@ export default function MessageList() {
       if (unreadOnly) params.unreadOnly = 'true';
       if (useStore.getState().threadedView) params.threaded = 'true';
       if (selectedFolder === 'INBOX' && (categorizationEnabled || selectedAccount?.categorization_enabled)) params.category = activeCategory;
-      const data = await api.getMessages(params);
-      appendMessages(applyReadGuard(data.messages));
-      setMessagesOffset(currentOffset + data.messages.length);
-      setHasMoreMessages(currentOffset + data.messages.length < data.total);
+      await refreshRequestRef.current.run(
+        () => api.getMessages(params),
+        data => {
+          appendMessages(applyReadGuard(data.messages));
+          setMessagesOffset(currentOffset + data.messages.length);
+          setHasMoreMessages(currentOffset + data.messages.length < data.total);
+        },
+      );
     } catch (err) {
       console.error('Failed to load more messages:', err);
     } finally {
-      setLoadingMessages(false);
+      if (loadingGeneration === loadingSequence.current) setLoadingMessages(false);
     }
   }, [selectedAccountId, selectedFolder, unreadOnly, activeCategory, pageSize, loadingMessages, hasMoreMessages, categorizationEnabled, selectedAccount?.categorization_enabled, applyReadGuard, appendMessages, setHasMoreMessages, setLoadingMessages, setMessagesOffset]);
 
@@ -566,15 +576,14 @@ export default function MessageList() {
           params = { limit: ps, offset: (pg - 1) * ps };
         } else {
           const currentOffset = state.messagesOffset;
-          // Backend caps limit at 500 — don't request more or the list silently shrinks
-          params = { limit: Math.min(currentOffset || ps, 500), offset: 0 };
+          params = { limit: currentOffset || ps, offset: 0 };
         }
         if (selectedAccountId) { params.accountId = selectedAccountId; params.folder = selectedFolder; }
         if (unreadOnly) params.unreadOnly = 'true';
         if (state.threadedView) params.threaded = 'true';
         if (selectedFolder === 'INBOX' && (categorizationEnabled || selectedAccount?.categorization_enabled)) params.category = activeCategory;
         const applied = await refreshRequestRef.current.run(
-          () => api.getMessages(params),
+          () => sm === 'paginated' ? api.getMessages(params) : fetchMessageWindow(api.getMessages, params, params.limit),
           (data) => {
             if (!isCurrent() || cancelled) return;
             setMessagesTotal(data.total);
@@ -691,7 +700,7 @@ export default function MessageList() {
     try {
       const offset = searchFetchedOffsetRef.current;
       const data = await api.search(qSnapshot, selectedAccountId || undefined, { offset, limit: searchPageSize, folder: searchFolder });
-      // Discard results if the query changed while we were fetching
+      // Discard results if the query, account or folder changed while we were fetching
       if (searchSeq.current !== seq || useStore.getState().searchQuery !== qSnapshot) return;
       searchFetchedOffsetRef.current = offset + data.messages.length;
       const current = useStore.getState().searchResults;
@@ -749,6 +758,7 @@ export default function MessageList() {
     if (loadingMessages) return;
     setLoadingMessages(true);
     setCurrentPage(pageNum);
+    const loadingGeneration = ++loadingSequence.current;
     try {
       const params = { limit: pageSize, offset: (pageNum - 1) * pageSize };
       if (selectedAccountId) { params.accountId = selectedAccountId; params.folder = selectedFolder; }
@@ -769,7 +779,7 @@ export default function MessageList() {
     } catch (err) {
       console.error('Failed to load page:', err);
     } finally {
-      setLoadingMessages(false);
+      if (loadingGeneration === loadingSequence.current) setLoadingMessages(false);
     }
   }, [selectedAccountId, selectedFolder, unreadOnly, activeCategory, pageSize, loadingMessages, threadedView, categorizationEnabled, selectedAccount?.categorization_enabled, applyReadGuard, setExpandedThreadId, setHasMoreMessages, setLoadingMessages, setMessages, setMessagesOffset, setMessagesTotal]);
 

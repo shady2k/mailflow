@@ -39,7 +39,7 @@ describe('render cache after body indexing and repeated opens', () => {
     const res = await fetch(base); expect(res.status).toBe(200); return res.json();
   };
   it('orphan CID does not cause an IMAP fetch on every repeated open', async () => {
-    imapManager.fetchMessageBody.mockResolvedValue({ html: '<p>Synthetic HTML<img src="cid:missing"></p>', text: null, attachments: [], found: true, renderComplete: true });
+    imapManager.fetchMessageBody.mockResolvedValue({ html: '<p>Synthetic HTML<img src="cid:missing"></p>', text: null, attachments: [], found: true, renderComplete: true, cidsComplete: true });
     await open(); await open();
     expect(imapManager.fetchMessageBody).toHaveBeenCalledTimes(1);
   });
@@ -49,7 +49,7 @@ describe('render cache after body indexing and repeated opens', () => {
     ['empty', { html: null, text: '', attachments: [] }],
     ['attachment-only', { html: null, text: null, attachments: [{ part: '1', filename: 'synthetic.txt', type: 'text/plain', size: 10 }] }],
   ])('uses the completed %s cache on repeated opens', async (_kind, body) => {
-    imapManager.fetchMessageBody.mockResolvedValue({ ...body, found: true, renderComplete: true });
+    imapManager.fetchMessageBody.mockResolvedValue({ ...body, found: true, renderComplete: true, cidsComplete: true });
     const first = await open(); const second = await open();
     expect(second.text).toBe(first.text);
     expect(second.attachments).toEqual(first.attachments);
@@ -61,7 +61,7 @@ describe('render cache after body indexing and repeated opens', () => {
     ['HTML', { html: '<p>Visible HTML</p>', text: null, attachments: [] }],
   ])('reuses the separately cached %s display body after search extraction', async (_kind, readerBody) => {
     imapManager.fetchMessageBody.mockResolvedValue({ html: readerBody.html, text: 'Complete searchable text including later MIME parts',
-      readerBody, attachments: [], found: true, renderComplete: true });
+      readerBody, attachments: [], found: true, renderComplete: true, cidsComplete: true });
     const worker = new BodyIndexer({ query, fetchBody: imapManager.fetchMessageBody });
     await worker.index({ ...message, account: { id: 'synthetic-account' } });
     expect(message.search_body_text).toContain('later MIME');
@@ -72,7 +72,7 @@ describe('render cache after body indexing and repeated opens', () => {
   });
   it('retries an incomplete reader fetch rather than permanently caching it', async () => {
     imapManager.fetchMessageBody.mockResolvedValueOnce({ html: null, text: null, attachments: [], found: true, renderComplete: false })
-      .mockResolvedValue({ html: null, text: 'Complete later', attachments: [], found: true, renderComplete: true });
+      .mockResolvedValue({ html: null, text: 'Complete later', attachments: [], found: true, renderComplete: true, cidsComplete: true });
     await open();
     expect(message.body_render_cached_at).toBeUndefined();
     await open(); await open();
@@ -81,7 +81,7 @@ describe('render cache after body indexing and repeated opens', () => {
   it('refuses to persist a fetched body after message identity changes', async () => {
     imapManager.fetchMessageBody.mockImplementation(async () => {
       message.uid = 99; message.message_id = '<replacement@lab.test>';
-      return { html: null, text: 'Stale old message', attachments: [], renderComplete: true };
+      return { html: null, text: 'Stale old message', attachments: [], renderComplete: true, cidsComplete: true };
     });
     const res = await fetch(base);
     expect(res.status).toBe(409);
@@ -90,7 +90,7 @@ describe('render cache after body indexing and repeated opens', () => {
   });
   it('does not overwrite a concurrent reader cache with search-only content', async () => {
     message.body_html = '<p>Already rendered</p>';
-    imapManager.fetchMessageBody.mockResolvedValue({ text: 'Complete search text', found: true, renderComplete: true,
+    imapManager.fetchMessageBody.mockResolvedValue({ text: 'Complete search text', found: true, renderComplete: true, cidsComplete: true,
       readerBody: { html: '<p>Other render</p>', text: null } });
     await new BodyIndexer({ query, fetchBody: imapManager.fetchMessageBody }).index({ ...message, account: { id: 'synthetic-account' } });
     expect(message.body_html).toBe('<p>Already rendered</p>');

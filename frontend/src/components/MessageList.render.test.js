@@ -908,3 +908,38 @@ test('Archive read/unread and archive Undo do not charge the account INBOX', asy
     await React.act(async () => root.unmount()); root = null;
   }
 });
+
+test('background refresh retains the whole loaded infinite window beyond backend limit 500', async () => {
+  const originalGet = api.getMessages;
+  const rows = Array.from({ length: 620 }, (_, i) => ({ ...MESSAGE, id: `window-${i}`, uid: i + 1, message_id: `<window-${i}@example.invalid>` }));
+  useStore.setState({ scrollMode: 'infinite', pageSize: 50, categorizationEnabled: false, unreadOnly: false });
+  api.getMessages = async params => ({ messages: rows.slice(Number(params.offset), Number(params.offset) + Math.min(Number(params.limit), 500)), total: rows.length });
+  try {
+    await mount({ rows, threadedView: false });
+    await React.act(async () => { useStore.getState().setMessages(rows); useStore.getState().setMessagesOffset(rows.length); });
+    await React.act(async () => { window.dispatchEvent(new CustomEvent('mailflow:refresh')); await new Promise(resolve => setTimeout(resolve, 80)); });
+    assert.equal(useStore.getState().messages.length, 620, 'refresh must not shrink 620 loaded rows to backend cap500');
+    assert.equal(useStore.getState().messagesOffset, 620);
+  } finally { api.getMessages = originalGet; await React.act(async () => root.unmount()); root = null; useStore.setState({ pageSize: 50 }); }
+});
+
+test('late infinite page cannot append Inbox rows after navigating to Archive', async () => {
+  const originalGet = api.getMessages;
+  let releasePage;
+  const archive = { ...MESSAGE, id: 'current-archive', folder: 'Archive' };
+  const obsolete = { ...MESSAGE, id: 'obsolete-inbox-page' };
+  useStore.setState({ scrollMode: 'infinite', pageSize: 50, categorizationEnabled: false, unreadOnly: false });
+  api.getMessages = async params => params.folder === 'Archive' ? { messages: [archive], total: 1 }
+    : Number(params.offset) > 0 ? new Promise(resolve => { releasePage = resolve; }) : { messages: [MESSAGE], total: 200 };
+  try {
+    await mount({ rows: [MESSAGE], threadedView: false });
+    const list = container.querySelector('[data-mailflow-list-scroll]');
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 1000 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 800 }); list.scrollTop = 200;
+    await React.act(async () => list.dispatchEvent(new window.Event('scroll', { bubbles: true })));
+    assert.equal(typeof releasePage, 'function');
+    await React.act(async () => useStore.getState().setSelectedAccount('acct-1', 'Archive'));
+    await React.act(async () => releasePage({ messages: [obsolete], total: 200 }));
+    assert.deepEqual(useStore.getState().messages.map(row => row.id), ['current-archive']);
+  } finally { api.getMessages = originalGet; await React.act(async () => root.unmount()); root = null; }
+});

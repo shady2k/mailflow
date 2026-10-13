@@ -1,4 +1,4 @@
-import { formatTimestamp } from './formatDate.js';
+import { formatDateTime } from './formatDate.js';
 // Whether to render an unread badge, and what it should say.
 //
 // A badge is an attention indicator, not a data field: absence means "nothing to tell you".
@@ -31,7 +31,7 @@ export function unreadBadge({ count, known = true, stale = false, observedAt = n
     text: stale ? `~${shown}` : shown,
     stale: !!stale,
     title: stale
-      ? `Last observed unread count${observedAt ? ` (${formatTimestamp(observedAt)})` : ''}; awaiting server refresh`
+      ? `Last observed unread count${observedAt ? ` (${formatDateTime(observedAt)})` : ''}; awaiting server refresh`
       : 'Unread messages',
   };
 }

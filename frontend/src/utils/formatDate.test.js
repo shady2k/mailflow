@@ -1,47 +1,61 @@
-import test from 'node:test';
-import process from 'node:process';
+// Dates in MailFlow's language, not the browser's (#593).
+import { test, describe, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import i18n from 'i18next';
-import { formatDate, formatDateTime, formatTime, formatTimestamp, formatCalendarDate } from './formatDate.js';
+import i18next from 'i18next';
+import { appLocale, formatDate, formatMessageDateTime, formatDateTime, formatDay } from './formatDate.js';
 
-await i18n.init({ lng: 'en', fallbackLng: false });
-const at = '2026-10-12T03:31:00Z';
+const at = (daysAgo, h = 15, m = 5) => { const d = new Date(); d.setDate(d.getDate() - daysAgo); d.setHours(h, m, 0, 0); return d; };
+const aYearAgo = () => { const d = new Date(); d.setFullYear(d.getFullYear() - 1, 9, 12); d.setHours(15, 5, 0, 0); return d; };
+afterEach(() => { i18next.language = undefined; });
 
-for (const [language, tag] of Object.entries({ en: 'en', ru: 'ru', de: 'de', fr: 'fr', es: 'es', it: 'it', pl: 'pl', cs: 'cs', ko: 'ko', zhCN: 'zh-CN', ptBR: 'pt-BR' })) {
-  test(`dates follow app locale ${language}`, async () => {
-    await i18n.changeLanguage(language);
-    const d = new Date(at);
-    assert.equal(formatDateTime(at), new Intl.DateTimeFormat(tag, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }).format(d));
-    assert.equal(formatTime(at), new Intl.DateTimeFormat(tag, { hour: 'numeric', minute: '2-digit' }).format(d));
-    assert.equal(formatTimestamp(at), new Intl.DateTimeFormat(tag, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(d));
-    assert.equal(formatCalendarDate(at), new Intl.DateTimeFormat(tag, { year: 'numeric', month: 'numeric', day: 'numeric' }).format(d));
-    const tomorrow = new Date(d);
-    tomorrow.setDate(d.getDate() + 1);
-    assert.equal(formatDate(at, tomorrow), new Intl.RelativeTimeFormat(tag, { numeric: 'auto' }).format(-1, 'day'));
-    assert.equal(formatDate(at, d), formatTime(at));
+describe('appLocale', () => {
+  test('follows the language chosen in MailFlow, mapped to a BCP 47 tag', () => {
+    for (const [code, tag] of [['ru', 'ru'], ['de', 'de'], ['ptBR', 'pt-BR'], ['zhCN', 'zh-CN']]) {
+      i18next.language = code;
+      assert.equal(appLocale(), tag);
+    }
+    i18next.language = undefined;
+    assert.equal(appLocale(), 'en');
   });
-}
-
-test('relative days use local calendar boundaries across DST', async () => {
-  await i18n.changeLanguage('en');
-  const original = process.env.TZ;
-  try {
-    process.env.TZ = 'America/New_York';
-    // The previous calendar day is only 23 hours long here.
-    assert.equal(formatDate('2026-03-08T00:30:00-05:00', new Date('2026-03-09T00:15:00-04:00')), 'yesterday');
-    assert.equal(formatDate('2026-11-01T00:30:00-04:00', new Date('2026-11-02T00:15:00-05:00')), 'yesterday');
-    assert.equal(formatDate('2026-10-12T03:31:00Z', new Date('2026-10-12T04:01:00Z')), 'yesterday');
-    assert.equal(formatDate('2025-12-31T23:00:00-05:00', new Date('2026-01-01T00:01:00-05:00')), 'yesterday');
-  } finally {
-    if (original === undefined) delete process.env.TZ;
-    else process.env.TZ = original;
-  }
 });
 
-test('old dates include year and invalid values never throw', async () => {
-  await i18n.changeLanguage('ru');
-  assert.match(formatDate('2025-05-10', new Date('2026-10-12')), /2025/);
-  for (const formatter of [formatDate, formatDateTime, formatTime, formatTimestamp, formatCalendarDate]) {
-    for (const bad of [null, '', 'not-a-date']) assert.equal(formatter(bad), '');
-  }
+describe('formatDate, the list label', () => {
+  test('English reads as it always did', () => {
+    assert.equal(formatDate(at(0), 'en'), '3:05 PM');
+    assert.equal(formatDate(at(1), 'en'), 'Yesterday');
+    assert.match(formatDate(aYearAgo(), 'en'), /^Oct 12, \d{4}$/);
+  });
+  test('Russian: Russian month and word for yesterday, 24-hour time, no AM/PM', () => {
+    i18next.language = 'ru';
+    assert.equal(formatDate(at(0)), '15:05');
+    assert.equal(formatDate(at(1)), 'Вчера');
+    assert.match(formatDate(aYearAgo()), /окт/);
+    assert.doesNotMatch(formatDate(aYearAgo()), /Oct|PM|AM/);
+  });
+  test('German and Chinese', () => {
+    assert.equal(formatDate(at(1), 'de'), 'Gestern');
+    assert.equal(formatDate(at(1), 'zh-CN'), '昨天');
+  });
+  test('an invalid date gives nothing rather than throwing', () => {
+    assert.equal(formatDate('not a date'), '');
+    assert.equal(formatDate(null), '');
+  });
+});
+
+describe('the other date surfaces', () => {
+  test('the reading pane, with and without the year', () => {
+    const d = aYearAgo();
+    assert.match(formatMessageDateTime(d, {}, 'en'), /^Oct 12, \d{4}, 3:05 PM$/);
+    assert.match(formatMessageDateTime(d, { withYear: false }, 'en'), /^Oct 12, 3:05 PM$/);
+    i18next.language = 'ru';
+    assert.match(formatMessageDateTime(d), /окт/);
+    assert.match(formatMessageDateTime(d), /15:05/);
+  });
+  test('full dates in settings and conversations follow the app language too', () => {
+    const d = aYearAgo();
+    i18next.language = 'de';
+    assert.equal(formatDay(d), d.toLocaleDateString('de'));
+    assert.equal(formatDateTime(d), d.toLocaleString('de'));
+    assert.equal(formatDay('nope'), '');
+  });
 });
