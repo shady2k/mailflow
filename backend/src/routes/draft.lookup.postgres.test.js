@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import pg from 'pg';
 import express from 'express';
@@ -19,6 +21,12 @@ describe.skipIf(!process.env.MAILFLOW_TEST_DATABASE_URL)('cached reply indicator
   beforeAll(async () => {
     database = new pg.Client({ connectionString: process.env.MAILFLOW_TEST_DATABASE_URL });
     await database.connect();
+    const schema = 'mf_qa_' + randomUUID().replaceAll('-', '');
+    await database.query(`CREATE SCHEMA ${schema}; SET search_path TO ${schema}, pg_temp, pg_catalog`);
+    database.fixtureSchema = schema;
+    const migration = readFileSync(new URL('../../migrations/0066_unicode_body_index.sql', import.meta.url), 'utf8');
+    await database.query(migration.slice(0, migration.indexOf('ALTER TABLE')));
+
     await database.query(`
       CREATE TEMP TABLE email_accounts (id uuid, user_id text, enabled boolean,
         include_in_unified_inbox boolean, folder_mappings jsonb);
@@ -49,6 +57,7 @@ describe.skipIf(!process.env.MAILFLOW_TEST_DATABASE_URL)('cached reply indicator
   });
   afterAll(async () => {
     if (server) await new Promise(resolve => server.close(resolve));
+    if (database?.fixtureSchema) await database.query(`DROP SCHEMA ${database.fixtureSchema} CASCADE`);
     await database?.end();
   });
   beforeEach(async () => {

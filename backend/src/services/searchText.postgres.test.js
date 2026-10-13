@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import pg from 'pg';
@@ -9,6 +10,10 @@ describe.skipIf(!process.env.MAILFLOW_TEST_DATABASE_URL)('Unicode body search Po
   beforeAll(async () => {
     database = new pg.Client({ connectionString: process.env.MAILFLOW_TEST_DATABASE_URL });
     await database.connect();
+    const schema = 'mf_qa_' + randomUUID().replaceAll('-', '');
+    await database.query(`CREATE SCHEMA ${schema}; SET search_path TO ${schema}, pg_temp, pg_catalog`);
+    database.fixtureSchema = schema;
+
     const migration = readFileSync(new URL('../../migrations/0066_unicode_body_index.sql', import.meta.url), 'utf8');
     await database.query(migration.slice(0, migration.indexOf('ALTER TABLE')));
     await database.query(`CREATE TEMP TABLE email_accounts (id uuid, name text, email_address text, color text);
@@ -22,7 +27,8 @@ describe.skipIf(!process.env.MAILFLOW_TEST_DATABASE_URL)('Unicode body search Po
       VALUES ('22222222-2222-4222-8222-222222222222',$1,1,'INBOX','<synthetic@example.invalid>','Unrelated subject',now(),
         'Поздняя MIME часть: ЁЖИК Спасибо ENbody','First part only',now())`, [account]);
   });
-  afterAll(async () => { await database?.end(); });
+  afterAll(async () => { if (database?.fixtureSchema) await database.query(`DROP SCHEMA ${database.fixtureSchema} CASCADE`);
+    await database?.end(); });
   it.each(['ёжик', 'ЁЖИК', 'спасибо', 'СПАСИБО', 'enbody', 'ENBODY'])('finds %s in verified full-body text regardless of RU/EN case', async term => {
     const { rows } = await database.query(searchRowsSQL([freeTextTermCondition(2)], 3), [[account], `%${term}%`, 50, 0]);
     expect(rows.map(row => row.uid)).toEqual(['1']);
