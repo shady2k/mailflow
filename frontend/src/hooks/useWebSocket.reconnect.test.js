@@ -28,6 +28,23 @@ const { registerConnectionRefresh } = await import('../utils/connectionRefresh.j
 registerConnectionRefresh('categories', async () => true);
 registerConnectionRefresh('messages', async () => { window.dispatchEvent(new CustomEvent('mailflow:refresh')); return true; });
 function App() { useWebSocket(); return null; }
+function confirm(ws) { ws.onopen(); ws.onmessage({ data: '{"type":"connected"}' }); }
+
+test('transport open awaits authentication and retains its deadline', async () => {
+  const root = createRoot(document.getElementById('root'));
+  useStore.getState().setConnectionStatus({ phase: 'unavailable' });
+  try {
+    await React.act(async () => root.render(React.createElement(App)));
+    socket.readyState = WebSocket.OPEN;
+    const deadline = socket._connectTimeout;
+    await React.act(async () => socket.onopen());
+    assert.notEqual(useStore.getState().connectionStatus.phase, 'healthy', 'upgrade is not authentication');
+    assert.equal(deadline._destroyed, false, 'OPEN awaiting authentication retains deadline');
+    await React.act(async () => socket.onmessage({ data: '{"type":"connected"}' }));
+    assert.equal(useStore.getState().connectionStatus.phase, 'healthy');
+    assert.equal(deadline._destroyed, true);
+  } finally { await React.act(async () => root.unmount()); }
+});
 
 test('resume replaces half-open transport, catches up once, and respects auth closure', async () => {
   const root = createRoot(document.getElementById('root'));
@@ -40,7 +57,7 @@ test('resume replaces half-open transport, catches up once, and respects auth cl
     await React.act(async () => root.render(React.createElement(App)));
     const first = socket;
     first.readyState = WebSocket.OPEN;
-    await React.act(async () => first.onopen());
+    await React.act(async () => confirm(first));
     first._lastActivity = Date.now() - 80000;
     await React.act(async () => window.dispatchEvent(new window.Event('focus')));
     assert.notEqual(socket, first, 'half-open socket must be replaced immediately');
@@ -49,7 +66,7 @@ test('resume replaces half-open transport, catches up once, and respects auth cl
     await React.act(async () => window.dispatchEvent(new window.Event('online')));
     assert.equal(socket, replacement, 'rapid resume does not duplicate connecting socket');
     replacement.readyState = WebSocket.OPEN;
-    await React.act(async () => replacement.onopen());
+    await React.act(async () => confirm(replacement));
     assert.equal(refreshes, 1);
     assert.equal(counts, 1);
     await React.act(async () => window.dispatchEvent(new window.Event('online')));
@@ -94,7 +111,7 @@ test('connection deadline and heartbeat recover without a close event; backend c
     assert.notEqual(socket, stalled, 'stuck CONNECTING must not wait indefinitely');
     const active = socket;
     active.readyState = WebSocket.OPEN;
-    await React.act(async () => active.onopen());
+    await React.act(async () => confirm(active));
     assert.equal(timers.has(active._connectTimeout), false);
     assert.equal(catchUps, 1, 'first successful connection after an outage must reconcile missed data');
     active._lastActivity = Date.now() - 80000;
@@ -102,7 +119,7 @@ test('connection deadline and heartbeat recover without a close event; backend c
     assert.notEqual(socket, active, 'heartbeat must recover even when close handshake never finishes');
     const restarted = socket;
     restarted.readyState = WebSocket.OPEN;
-    await React.act(async () => restarted.onopen());
+    await React.act(async () => confirm(restarted));
     restarted.readyState = WebSocket.CLOSED;
     await React.act(async () => restarted.onclose({ code: 1006 }));
     const backoff = [...timers].find(([, timer]) => !timer.repeat && timer.delay >= 1000 && timer.delay < 1301);
@@ -132,12 +149,12 @@ test('recovery stays visible until data succeeds; retry is deduplicated and auth
     await React.act(async () => root.render(React.createElement(App)));
     assert.equal(useStore.getState().connectionStatus.phase,'healthy','cold start has no immediate warning');
     socket.readyState=WebSocket.OPEN;
-    await React.act(async () => socket.onopen());
+    await React.act(async () => confirm(socket));
     await React.act(async () => window.dispatchEvent(new window.Event('offline')));
     assert.equal(useStore.getState().connectionStatus.phase,'offline');
     await React.act(async () => window.dispatchEvent(new window.Event('online')));
     socket.readyState=WebSocket.OPEN;
-    await React.act(async () => socket.onopen());
+    await React.act(async () => confirm(socket));
     assert.equal(useStore.getState().connectionStatus.phase,'refreshing');
     await React.act(async () => {
       window.dispatchEvent(new CustomEvent('mailflow:connection-retry'));
@@ -176,8 +193,8 @@ test('refresh timeout invalidates late values before manual retry succeeds', asy
   const unregister=registerConnectionRefresh('messages',async current=>{const value=await work;if(!current())return false;applied.push(value);return true;});
   api.getUnreadCounts=async()=>({total:0,byAccount:{}});
   try {
-    await React.act(async()=>root.render(React.createElement(App)));socket.readyState=WebSocket.OPEN;await React.act(async()=>socket.onopen());
-    await React.act(async()=>window.dispatchEvent(new window.Event('online')));socket.readyState=WebSocket.OPEN;await React.act(async()=>socket.onopen());
+    await React.act(async()=>root.render(React.createElement(App)));socket.readyState=WebSocket.OPEN;await React.act(async()=>confirm(socket));
+    await React.act(async()=>window.dispatchEvent(new window.Event('online')));socket.readyState=WebSocket.OPEN;await React.act(async()=>confirm(socket));
     const timeout=[...deadlines][0];assert.ok(timeout);
     await React.act(async()=>{deadlines.delete(timeout[0]);timeout[1]();});
     assert.equal(useStore.getState().connectionStatus.phase,'refreshError');
@@ -193,6 +210,34 @@ test('refresh timeout invalidates late values before manual retry succeeds', asy
   }
 });
 
+test('hidden online is remembered until visible focus even with a fresh OPEN socket', async () => {
+  const root = createRoot(document.getElementById('root'));
+  const originalCounts = api.getUnreadCounts;
+  api.getUnreadCounts = async () => ({ byAccount: {} });
+  const unregisterMessages = registerConnectionRefresh('messages', async () => true);
+  const unregisterCategories = registerConnectionRefresh('categories', async () => true);
+  try {
+    await React.act(async () => root.render(React.createElement(App)));
+    socket.readyState = WebSocket.OPEN; await React.act(async () => confirm(socket));
+    const before = socket;
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+    await React.act(async () => {
+      window.dispatchEvent(new window.Event('offline'));
+      window.dispatchEvent(new window.Event('online'));
+    });
+    assert.equal(socket, before, 'background does not duplicate live transport');
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    await React.act(async () => window.dispatchEvent(new window.Event('focus')));
+    assert.notEqual(socket, before, 'fresh OPEN is repaired after remembered offline/online');
+    socket.readyState = WebSocket.OPEN; await React.act(async () => confirm(socket));
+    assert.equal(useStore.getState().connectionStatus.phase, 'healthy');
+  } finally {
+    await React.act(async () => root.unmount());
+    unregisterMessages(); unregisterCategories(); api.getUnreadCounts = originalCounts;
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+  }
+});
+
 test('loaded folder snapshots participate in catch-up and late disconnected folders cannot apply', async () => {
   const root=createRoot(document.getElementById('root'));
   const oldCounts=api.getUnreadCounts, oldFolders=api.getFolders;
@@ -202,15 +247,15 @@ test('loaded folder snapshots participate in catch-up and late disconnected fold
   api.getFolders=async()=>{if(fail)throw new Error('Synthetic folder failure');return new Promise(resolve=>{resolveFolders=resolve;});};
   useStore.setState({accounts:[{id:'synthetic-a'}],folders:{'synthetic-a':[{path:'Archive',total:1}]}});
   try {
-    await React.act(async()=>root.render(React.createElement(App)));socket.readyState=WebSocket.OPEN;await React.act(async()=>socket.onopen());
-    await React.act(async()=>window.dispatchEvent(new window.Event('online')));socket.readyState=WebSocket.OPEN;await React.act(async()=>socket.onopen());
+    await React.act(async()=>root.render(React.createElement(App)));socket.readyState=WebSocket.OPEN;await React.act(async()=>confirm(socket));
+    await React.act(async()=>window.dispatchEvent(new window.Event('online')));socket.readyState=WebSocket.OPEN;await React.act(async()=>confirm(socket));
     assert.equal(useStore.getState().connectionStatus.phase,'refreshError');
     fail=false;await React.act(async()=>window.dispatchEvent(new CustomEvent('mailflow:connection-retry')));
     assert.equal(useStore.getState().connectionStatus.phase,'refreshing');
     await React.act(async()=>window.dispatchEvent(new window.Event('offline')));
     await React.act(async()=>resolveFolders([{path:'Archive',total:90}]));
     assert.equal(useStore.getState().folders['synthetic-a'][0].total,1);
-    await React.act(async()=>window.dispatchEvent(new window.Event('online')));socket.readyState=WebSocket.OPEN;await React.act(async()=>socket.onopen());
+    await React.act(async()=>window.dispatchEvent(new window.Event('online')));socket.readyState=WebSocket.OPEN;await React.act(async()=>confirm(socket));
     await React.act(async()=>resolveFolders([{path:'Archive',total:2}]));
     assert.equal(useStore.getState().folders['synthetic-a'][0].total,2);
     assert.equal(useStore.getState().connectionStatus.phase,'healthy');

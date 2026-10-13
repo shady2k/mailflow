@@ -1,3 +1,4 @@
+import { countWriteState } from '../utils/countWrites.js';
 import { refreshConnectionData } from '../utils/connectionRefresh.js';
 import { useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -53,7 +54,7 @@ export function useWebSocket() {
   }, []);
   const reconcile = useCallback(() => {
     const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN || refreshPromise.current) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN || !ws._confirmed || refreshPromise.current) return;
     clearTimeout(refreshTimer.current);
     const generation = ++refreshGeneration.current;
     const current = () => mountedRef.current && refreshGeneration.current === generation && wsRef.current === ws && ws.readyState === WebSocket.OPEN;
@@ -69,7 +70,8 @@ export function useWebSocket() {
         if (!current() || useStore.getState().user?.id !== state.user?.id) return false;
         useStore.getState().setUnreadCounts(counts);
         folderAccounts.forEach((id, index) => useStore.getState().setFolders(id, folders[index]));
-        return true;
+        return counts.complete !== false && countWriteState().pending === 0
+          && Object.keys(useStore.getState().pendingCounts).length === 0;
       }),
       new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Refresh timeout')), 30000); }),
     ]);
@@ -123,19 +125,14 @@ export function useWebSocket() {
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
     ws._statusTimer = setTimeout(() => {
-      if (wsRef.current === ws && ws.readyState === WebSocket.CONNECTING) setStatus('connecting');
+      if (wsRef.current === ws && (ws.readyState === WebSocket.CONNECTING || (ws.readyState === WebSocket.OPEN && !ws._confirmed))) setStatus('connecting');
     }, 2000);
     ws._connectTimeout = setTimeout(() => {
-      if (wsRef.current === ws && ws.readyState === WebSocket.CONNECTING) connect();
+      if (wsRef.current === ws && (ws.readyState === WebSocket.CONNECTING || (ws.readyState === WebSocket.OPEN && !ws._confirmed))) connect();
     }, 15000);
 
     ws.onopen = () => {
-      clearTimeout(ws._statusTimer);
-      clearTimeout(ws._connectTimeout);
-      const wasReconnect = hasConnectedBefore.current || needsCatchUp.current;
-      needsCatchUp.current = false;
-      hasConnectedBefore.current = true;
-      reconnectAttempt.current = 0;
+      if (wsRef.current !== ws || !mountedRef.current) return;
       ws._lastActivity = Date.now();
       // Ping every 30s. If no message (including the server's pong) has arrived in ~2.5 intervals,
       // the socket is half-open — common after sleep/network blips, where onclose never fires and
@@ -149,18 +146,26 @@ export function useWebSocket() {
         ws.send(JSON.stringify({ type: 'ping' }));
       }, 30000);
       ws._pingInterval = pingInterval;
-      // On reconnect, catch up on any messages that arrived during the outage
-      if (wasReconnect) {
-        recordDiagEvent({ category: 'ws', type: 'reconnect' });
-        reconcile();
-      } else setStatus('healthy');
     };
 
     ws.onmessage = (event) => {
+      if (wsRef.current !== ws || !mountedRef.current) return;
       ws._lastActivity = Date.now(); // any inbound frame (incl. pong) proves the socket is alive
       try {
         const data = JSON.parse(event.data);
-        handleMessage(data);
+        if (data.type === 'connected' && !ws._confirmed) {
+          ws._confirmed = true;
+          clearTimeout(ws._statusTimer);
+          clearTimeout(ws._connectTimeout);
+          const wasReconnect = hasConnectedBefore.current || needsCatchUp.current;
+          needsCatchUp.current = false;
+          hasConnectedBefore.current = true;
+          reconnectAttempt.current = 0;
+          if (wasReconnect) {
+            recordDiagEvent({ category: 'ws', type: 'reconnect' });
+            reconcile();
+          } else setStatus('healthy');
+        } else handleMessage(data);
       } catch (err) { console.error('WS message error:', err); }
     };
 
@@ -463,10 +468,11 @@ export function useWebSocket() {
   // instead of waiting out the reconnect backoff or a suspended heartbeat.
   useEffect(() => {
     const revive = (event) => {
+      if (event?.type === 'online') needsCatchUp.current = true;
       if (document.visibilityState !== 'visible') return;
       const ws = wsRef.current;
       if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING ||
-          (ws.readyState === WebSocket.OPEN && (event?.type === 'online' || event?.persisted ||
+          (ws.readyState === WebSocket.OPEN && (needsCatchUp.current || event?.type === 'online' || event?.persisted ||
             Date.now() - (ws._lastActivity || 0) > 75000))) {
         clearTimeout(reconnectTimer.current);
         reconnectAttempt.current = 0;
