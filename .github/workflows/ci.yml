@@ -103,4 +103,4 @@ jobs:
           npm ci --prefix backend
           npm ci --prefix frontend
       - name: Real WS HTTP and multi-client recovery
-        run: node --test scripts/reconnect-transport.test.mjs
+        run: node --test scripts/reconnect-transport.test.mjs scripts/list-window-transport.test.mjs

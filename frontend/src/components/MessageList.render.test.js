@@ -928,7 +928,7 @@ test('late infinite page cannot append Inbox rows after navigating to Archive', 
   let releasePage;
   const archive = { ...MESSAGE, id: 'current-archive', folder: 'Archive' };
   const obsolete = { ...MESSAGE, id: 'obsolete-inbox-page' };
-  useStore.setState({ scrollMode: 'infinite', pageSize: 50, categorizationEnabled: false, unreadOnly: false });
+  useStore.setState({ scrollMode: 'infinite', pageSize: 1, categorizationEnabled: false, unreadOnly: false });
   api.getMessages = async params => params.folder === 'Archive' ? { messages: [archive], total: 1 }
     : Number(params.offset) > 0 ? new Promise(resolve => { releasePage = resolve; }) : { messages: [MESSAGE], total: 200 };
   try {
@@ -941,5 +941,66 @@ test('late infinite page cannot append Inbox rows after navigating to Archive', 
     await React.act(async () => useStore.getState().setSelectedAccount('acct-1', 'Archive'));
     await React.act(async () => releasePage({ messages: [obsolete], total: 200 }));
     assert.deepEqual(useStore.getState().messages.map(row => row.id), ['current-archive']);
+  } finally { api.getMessages = originalGet; await React.act(async () => root.unmount()); root = null; useStore.setState({ pageSize: 50 }); }
+});
+
+test('infinite list fills the viewport without requiring a scroll event or Load more button', async () => {
+  const originalGet = api.getMessages;
+  const rows = Array.from({ length: 6 }, (_, i) => ({ ...MESSAGE, id: `auto-${i}`, message_id: `<auto-${i}@example.invalid>` }));
+  useStore.setState({ scrollMode: 'infinite', pageSize: 2, categorizationEnabled: false });
+  api.getMessages = async p => ({ messages: rows.slice(p.offset, p.offset + Number(p.limit)), total: rows.length, hasMore: p.offset + Number(p.limit) < rows.length, nextOffset: p.offset + Math.min(Number(p.limit), rows.length - p.offset) });
+  try {
+    await mount({ rows, threadedView: false });
+    const list = container.querySelector('[data-mailflow-list-scroll]');
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 600 });
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, get: () => useStore.getState().messages.length * 200 });
+    await React.act(async () => { useStore.setState({ messages: [...useStore.getState().messages] }); await new Promise(r => setTimeout(r, 40)); });
+    assert.ok(useStore.getState().messages.length >= 4, 'short list must auto-load without a scroll event');
+    assert.equal([...container.querySelectorAll('button')].some(b => b.textContent === 'messageList.loadMore'), false);
+  } finally { api.getMessages = originalGet; await React.act(async () => root.unmount()); root = null; useStore.setState({ pageSize: 50 }); }
+});
+
+test('refresh arriving during an in-flight page is replayed after that page settles', async () => {
+  const originalGet = api.getMessages;
+  let release, calls = 0;
+  const fresh = { ...MESSAGE, id: 'after-sync', message_id: '<after-sync@example.invalid>' };
+  api.getMessages = () => { calls++; return calls === 1 ? new Promise(resolve => { release = resolve; }) : Promise.resolve({ messages: [MESSAGE, fresh], total: 2, hasMore: false, nextOffset: 2 }); };
+  try {
+    await mount({ rows: [MESSAGE], threadedView: false });
+    await React.act(async () => window.dispatchEvent(new CustomEvent('mailflow:refresh')));
+    await React.act(async () => { release({ messages: [MESSAGE], total: 1, hasMore: false, nextOffset: 1 }); await new Promise(r => setTimeout(r, 50)); });
+    assert.ok(calls >= 2, 'busy refresh must be queued, not discarded');
+    assert.deepEqual(useStore.getState().messages.map(m => m.id), ['msg-1', 'after-sync']);
   } finally { api.getMessages = originalGet; await React.act(async () => root.unmount()); root = null; }
+});
+
+test('paginated view fills guard-hidden slots automatically and Undo stays within that page', async () => {
+  const originalGet = api.getMessages;
+  const rows = Array.from({ length: 5 }, (_, i) => ({ ...MESSAGE, id: `filled-page-${i}`, message_id: `<filled-page-${i}@example.invalid>` }));
+  useStore.setState({ scrollMode: 'paginated', pageSize: 3, categorizationEnabled: false });
+  api.getMessages = async p => ({ messages: rows.slice(p.offset, p.offset + Number(p.limit)), total: rows.length, hasMore: p.offset + Number(p.limit) < rows.length, nextOffset: Math.min(rows.length, p.offset + Number(p.limit)) });
+  try {
+    await mount({ rows, threadedView: false });
+    await React.act(async () => { deleteGuards.setPendingDelete(rows[0].id); useStore.getState().removeMessage(rows[0].id); await new Promise(r => setTimeout(r, 40)); });
+    assert.deepEqual(useStore.getState().messages.map(m => m.id), rows.slice(1, 4).map(m => m.id));
+    assert.equal([...container.querySelectorAll('button')].some(b => b.textContent === 'messageList.loadMore'), false);
+    await React.act(async () => { deleteGuards.clearDeleteGuard(rows[0].id); useStore.getState().restoreMessages([rows[0]]); });
+    assert.deepEqual(useStore.getState().messages.map(m => m.id), rows.slice(0, 3).map(m => m.id));
+  } finally { deleteGuards.clearDeleteGuard(rows[0].id); api.getMessages = originalGet; await React.act(async () => root.unmount()); root = null; useStore.setState({ scrollMode: 'infinite', pageSize: 50 }); }
+});
+
+test('resync of a deleted last page selects the last valid page without a full restart', async () => {
+  const originalGet = api.getMessages;
+  let rows = Array.from({ length: 12 }, (_, i) => ({ ...MESSAGE, id: `shrunk-${i}`, message_id: `<shrunk-${i}@example.invalid>` }));
+  useStore.setState({ scrollMode: 'paginated', pageSize: 5, categorizationEnabled: false });
+  api.getMessages = async p => ({ messages: rows.slice(p.offset, p.offset + Number(p.limit)), total: rows.length, nextOffset: Math.min(p.offset + Number(p.limit), rows.length), hasMore: p.offset + Number(p.limit) < rows.length });
+  try {
+    await mount({ rows, threadedView: false });
+    const next = () => [...container.querySelectorAll('button')].find(b => b.textContent.includes('messageList.nextPage'));
+    await React.act(async () => next().click()); await React.act(async () => next().click());
+    assert.deepEqual(useStore.getState().messages.map(m => m.id), rows.slice(10).map(m => m.id));
+    rows = rows.slice(0, 9);
+    await React.act(async () => { window.dispatchEvent(new CustomEvent('mailflow:refresh')); await new Promise(r => setTimeout(r, 40)); });
+    assert.deepEqual(useStore.getState().messages.map(m => m.id), rows.slice(5).map(m => m.id));
+  } finally { api.getMessages = originalGet; await React.act(async () => root.unmount()); root = null; useStore.setState({ scrollMode: 'infinite', pageSize: 50 }); }
 });

@@ -38,7 +38,7 @@ import SpamBadge from './SpamBadge.jsx';
 import ReplyDraftIndicator from './ReplyDraftIndicator.jsx';
 import SpamExplainModal from './SpamExplainModal.jsx';
 import { shortcutBus } from '../utils/shortcutBus.js';
-import { fetchMessageWindow } from '../utils/messageWindow.js';
+import { fetchMessageWindow, fetchMessagePage } from '../utils/messageWindow.js';
 import { createLatestRequest } from '../utils/latestRequest.js';
 import { pendingMarkReadMap, completedMarkReadMap, setPending } from '../utils/pendingReads.js';
 import { applyDeleteGuard, clearDeleteGuard, clearPendingDelete, setCompletedDelete, setPendingDelete, threadDeleteGuardKey } from '../utils/pendingDeletes.js';
@@ -356,8 +356,11 @@ export default function MessageList() {
   // response (or a page of more results) that arrives after any of them is dropped (#592).
   const searchSeq = useRef(0);
   const loadingSequence = useRef(0);
+  const [listIdleRevision, setListIdleRevision] = useState(0);
+  const [listLoadError, setListLoadError] = useState(null);
+  const [pageHasMore, setPageHasMore] = useState(false);
   const refreshRequestRef = useRef(null);
-  if (refreshRequestRef.current === null) refreshRequestRef.current = createLatestRequest();
+  if (refreshRequestRef.current === null) refreshRequestRef.current = createLatestRequest({ onIdle: () => setListIdleRevision(value => value + 1) });
   // Bumped to force the search effect to re-run (e.g. after rules move messages) so an
   // active search snapshot drops messages that no longer match. See #223.
   const [searchReloadToken, setSearchReloadToken] = useState(0);
@@ -457,6 +460,7 @@ export default function MessageList() {
       if (!accountsReady) return;
       const loadingGeneration = ++loadingSequence.current;
       setLoadingMessages(true);
+      setListLoadError(null);
       setMessagesOffset(0);
       setHasMoreMessages(true);
       setCurrentPage(1);
@@ -470,13 +474,14 @@ export default function MessageList() {
         if (threadedView) params.threaded = 'true';
         if (selectedFolder === 'INBOX' && (categorizationEnabled || selectedAccount?.categorization_enabled)) params.category = activeCategory;
         await refreshRequestRef.current.run(
-          () => api.getMessages(params),
+          () => fetchMessageWindow(api.getMessages, params, Number(pageSize), applyDeleteGuard),
           (data) => {
             if (cancelled) return;
             setMessagesTotal(data.total);
             setMessages(applyReadGuard(data.messages));
-            setMessagesOffset(data.messages.length);
-            setHasMoreMessages(data.messages.length < data.total);
+            setMessagesOffset(data.nextOffset);
+            setPageHasMore(data.hasMore);
+            setHasMoreMessages(scrollMode === 'infinite' && data.hasMore);
 
             // Pull the folder from IMAP whenever it is opened, not only when it happens to
             // be empty. Only INBOX is polled in the background, so every other folder showed
@@ -504,6 +509,7 @@ export default function MessageList() {
         );
       } catch (err) {
         console.error('Failed to load messages:', err);
+        if (!cancelled && loadingGeneration === loadingSequence.current) setListLoadError({ retry: run });
         setFolderSyncing(false);
       } finally {
         if (!cancelled && loadingGeneration === loadingSequence.current) setLoadingMessages(false);
@@ -515,9 +521,10 @@ export default function MessageList() {
 
   // Load next page (called by scroll or button)
   const loadMore = useCallback(async () => {
-    if (loadingMessages || !hasMoreMessages) return;
+    if (loadingMessages || !hasMoreMessages || searchQuery.trim() || refreshRequestRef.current.pending) return;
     const loadingGeneration = ++loadingSequence.current;
     setLoadingMessages(true);
+    setListLoadError(null);
     try {
       // Read current offset directly from store to avoid stale closure
       const currentOffset = useStore.getState().messagesOffset;
@@ -530,19 +537,20 @@ export default function MessageList() {
       if (useStore.getState().threadedView) params.threaded = 'true';
       if (selectedFolder === 'INBOX' && (categorizationEnabled || selectedAccount?.categorization_enabled)) params.category = activeCategory;
       await refreshRequestRef.current.run(
-        () => api.getMessages(params),
+        () => fetchMessageWindow(api.getMessages, params, Number(pageSize), applyDeleteGuard),
         data => {
           appendMessages(applyReadGuard(data.messages));
-          setMessagesOffset(currentOffset + data.messages.length);
-          setHasMoreMessages(currentOffset + data.messages.length < data.total);
+          setMessagesOffset(data.nextOffset);
+          setHasMoreMessages(data.hasMore);
         },
       );
     } catch (err) {
       console.error('Failed to load more messages:', err);
+      if (loadingGeneration === loadingSequence.current) setListLoadError({ retry: loadMore });
     } finally {
       if (loadingGeneration === loadingSequence.current) setLoadingMessages(false);
     }
-  }, [selectedAccountId, selectedFolder, unreadOnly, activeCategory, pageSize, loadingMessages, hasMoreMessages, categorizationEnabled, selectedAccount?.categorization_enabled, applyReadGuard, appendMessages, setHasMoreMessages, setLoadingMessages, setMessagesOffset]);
+  }, [selectedAccountId, selectedFolder, unreadOnly, activeCategory, pageSize, searchQuery, loadingMessages, hasMoreMessages, categorizationEnabled, selectedAccount?.categorization_enabled, applyReadGuard, appendMessages, setHasMoreMessages, setLoadingMessages, setMessagesOffset]);
 
   // Listen for background refresh events from WebSocket. If a message was just
   // opened, give its body request a brief head start before reloading the full list.
@@ -583,9 +591,12 @@ export default function MessageList() {
         if (state.threadedView) params.threaded = 'true';
         if (selectedFolder === 'INBOX' && (categorizationEnabled || selectedAccount?.categorization_enabled)) params.category = activeCategory;
         const applied = await refreshRequestRef.current.run(
-          () => sm === 'paginated' ? api.getMessages(params) : fetchMessageWindow(api.getMessages, params, params.limit),
+          () => sm === 'paginated' ? fetchMessagePage(api.getMessages, params, ps, applyDeleteGuard) : fetchMessageWindow(api.getMessages, params, params.limit, applyDeleteGuard),
           (data) => {
             if (!isCurrent() || cancelled) return;
+            if (sm === 'paginated') setCurrentPage(data.total ? Math.floor(data.pageOffset / ps) + 1 : 1);
+            setListLoadError(null);
+            setPageHasMore(data.hasMore);
             setMessagesTotal(data.total);
             // If the unread filter is on and the currently open message was just marked
             // read, the server won't return it — preserve it so the user can keep reading.
@@ -596,27 +607,29 @@ export default function MessageList() {
               if (kept) msgs = [kept, ...msgs];
             }
             setMessages(msgs);
+            setMessagesOffset(data.nextOffset);
             if (sm === 'paginated') {
               setHasMoreMessages(false);
             } else {
-              setMessagesOffset(data.messages.length);
-              setHasMoreMessages(data.messages.length < data.total);
+              setHasMoreMessages(data.hasMore);
             }
           },
         );
         return applied && isCurrent() && !cancelled;
-      } catch (error) { if (reconcile) throw error; }
+      } catch (error) {
+        if (!cancelled && isCurrent()) setListLoadError({ retry: () => run() });
+        if (reconcile) throw error;
+      }
     };
 
     const handler = () => {
-      if (!useStore.getState().loadingMessages && !searchQuery.trim()) {
-        const delayMs = Math.max(0, recentMessageOpenUntilRef.current - Date.now());
-        clearTimeout(deferredRefreshTimerRef.current);
-        if (delayMs > 0) {
-          deferredRefreshTimerRef.current = setTimeout(run, delayMs);
-        } else {
-          run();
-        }
+      if (!useStore.getState().accountsReady || searchQuery.trim()) return;
+      const delayMs = Math.max(0, recentMessageOpenUntilRef.current - Date.now());
+      clearTimeout(deferredRefreshTimerRef.current);
+      if (delayMs > 0) {
+        deferredRefreshTimerRef.current = setTimeout(() => refreshRequestRef.current.schedule(run), delayMs);
+      } else {
+        refreshRequestRef.current.schedule(run);
       }
     };
     const unregisterRefresh = registerConnectionRefresh('messages', current => run(true, current));
@@ -747,17 +760,37 @@ export default function MessageList() {
     const delta = scrollTop - lastScrollTopRef.current;
     lastScrollTopRef.current = scrollTop;
     if (Math.abs(delta) > 4) setFabVisible(delta < 0 || scrollTop < 60);
-    if (scrollMode !== 'infinite' || loadingMessages || !hasMoreMessages) return;
+    if (searchQuery.trim() || scrollMode !== 'infinite' || loadingMessages || !hasMoreMessages) return;
     if (scrollTop + clientHeight >= scrollHeight - 300) {
       loadMore();
     }
-  }, [scrollMode, loadMore, loadingMessages, hasMoreMessages]);
+  }, [searchQuery, scrollMode, loadMore, loadingMessages, hasMoreMessages]);
+
+  useEffect(() => {
+    if (searchQuery.trim() || scrollMode !== 'infinite' || loadingMessages || listLoadError || !hasMoreMessages) return;
+    const list = listRef.current;
+    if (!list) return;
+    const fill = () => {
+      if (list.clientHeight > 0 && list.scrollTop + list.clientHeight >= list.scrollHeight - 300) loadMore();
+    };
+    fill();
+    const observer = new ResizeObserver(fill);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [searchQuery, scrollMode, loadingMessages, listLoadError, hasMoreMessages, messages, listIdleRevision, loadMore]);
+
+  useEffect(() => {
+    if (scrollMode !== 'paginated' || searchQuery.trim() || loadingMessages || listLoadError || !pageHasMore) return;
+    if (messages.length < Number(pageSize) && !refreshRequestRef.current.pending) window.dispatchEvent(new CustomEvent('mailflow:refresh'));
+  }, [scrollMode, searchQuery, loadingMessages, listLoadError, pageHasMore, pageSize, messages, listIdleRevision]);
 
   // Load a specific page (paginated mode)
   const loadPage = useCallback(async (pageNum) => {
     if (loadingMessages) return;
     setLoadingMessages(true);
-    setCurrentPage(pageNum);
+    setSelectedIds(new Set());
+    setSelectionModeActive(false);
+    setListLoadError(null);
     const loadingGeneration = ++loadingSequence.current;
     try {
       const params = { limit: pageSize, offset: (pageNum - 1) * pageSize };
@@ -766,11 +799,13 @@ export default function MessageList() {
       if (threadedView) params.threaded = 'true';
       if (selectedFolder === 'INBOX' && (categorizationEnabled || selectedAccount?.categorization_enabled)) params.category = activeCategory;
       await refreshRequestRef.current.run(
-        () => api.getMessages(params),
+        () => fetchMessagePage(api.getMessages, params, Number(pageSize), applyDeleteGuard),
         (data) => {
+          setCurrentPage(data.total ? Math.floor(data.pageOffset / Number(pageSize)) + 1 : 1);
+          setPageHasMore(data.hasMore);
           setMessagesTotal(data.total);
           setMessages(applyReadGuard(data.messages));
-          setMessagesOffset((pageNum - 1) * pageSize + data.messages.length);
+          setMessagesOffset(data.nextOffset);
           setHasMoreMessages(false);
           setExpandedThreadId(null);
           if (listRef.current) listRef.current.scrollTop = 0;
@@ -778,6 +813,7 @@ export default function MessageList() {
       );
     } catch (err) {
       console.error('Failed to load page:', err);
+      if (loadingGeneration === loadingSequence.current) setListLoadError({ retry: () => loadPage(pageNum) });
     } finally {
       if (loadingGeneration === loadingSequence.current) setLoadingMessages(false);
     }
@@ -4002,7 +4038,7 @@ export default function MessageList() {
           </div>
         )}
 
-        {!(loadingMessages && !searchQuery.trim()) && !isSearching && !searchLoadingMore && displayMessages.length === 0 && (
+        {!(loadingMessages && !searchQuery.trim()) && !isSearching && !searchLoadingMore && !listLoadError && displayMessages.length === 0 && (
           <EmptyState
             folderSyncing={folderSyncing && !searchQuery.trim()}
             searchQuery={searchQuery.trim()}
@@ -4184,24 +4220,13 @@ export default function MessageList() {
                 <div>{t('common.loading')}</div>
               </div>
             )}
-            {!loadingMessages && hasMoreMessages && displayMessages.length > 0 && (
-              <div style={{ padding: '12px 16px', textAlign: 'center' }}>
-                <button
-                  onClick={loadMore}
-                  style={{
-                    padding: '7px 20px', background: 'transparent',
-                    border: '1px solid var(--border)', borderRadius: 7,
-                    color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 12,
-                    transition: 'all 0.1s',
-                  }}
-                  onMouseEnter={e => { e.target.style.borderColor = 'var(--accent)'; e.target.style.color = 'var(--accent)'; }}
-                  onMouseLeave={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.color = 'var(--text-secondary)'; }}
-                >
-                  {t('messageList.loadMore')}
-                </button>
+            {listLoadError && !loadingMessages && (
+              <div role="alert" style={{ padding: '12px 16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>
+                <span>{t('connection.refreshError')}</span>{' '}
+                <button onClick={listLoadError.retry} style={{ padding: '7px 12px', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--accent)', background: 'transparent', cursor: 'pointer' }}>{t('common.retry')}</button>
               </div>
             )}
-            {!loadingMessages && !hasMoreMessages && displayMessages.length > 0 && (
+            {scrollMode === 'infinite' && !loadingMessages && !hasMoreMessages && displayMessages.length > 0 && (
               <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 11 }}>
                 {t('messageList.noMoreMessages')}
               </div>

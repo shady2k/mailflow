@@ -350,16 +350,18 @@ export const useStore = create((set, get) => ({
   }),
   restoreMessages: (msgs) => set(state => {
     const list = Array.isArray(msgs) ? msgs : [msgs];
-    const sort = arr => [...arr].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const sort = arr => [...arr].sort((a, b) => new Date(b.date) - new Date(a.date) || String(a.id).localeCompare(String(b.id)));
     // Deduplicate against both the main list and searchResults by stable identity (Message-ID when
     // present, else id): if the message is already present — including re-added by a network
     // refresh under a regenerated id (matched via Message-ID) — skip it. The local copy carries the
     // freshest optimistic state, so we prefer it over the server view. See missingByIdentity.
     const missing = missingByIdentity(state.messages, list);
     if (missing.length === 0 && !state.searchQuery.trim()) return {};
+    const merged = sort([...state.messages, ...missing]);
+    const visibleWindow = state.scrollMode === 'paginated' && !state.searchQuery.trim() ? merged.slice(0, Number(state.pageSize)) : merged;
     const missingFromSearch = missingByIdentity(state.searchResults, list);
     return {
-      messages: missing.length ? sort([...state.messages, ...missing]) : state.messages,
+      messages: missing.length ? visibleWindow : state.messages,
       searchResults: state.searchQuery.trim() && missingFromSearch.length
         ? sort([...state.searchResults, ...missingFromSearch])
         : state.searchResults,

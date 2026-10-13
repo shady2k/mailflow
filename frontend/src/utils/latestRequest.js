@@ -1,14 +1,34 @@
-export function createLatestRequest() {
-  let sequence = 0;
-
+export function createLatestRequest({ onIdle = () => {} } = {}) {
+  let sequence = 0, scope = 0, pending = false, queued = null;
+  const schedule = callback => {
+    if (pending) { queued = callback; return; }
+    const scheduledScope = scope;
+    Promise.resolve().then(() => {
+      if (scope !== scheduledScope) return;
+      if (pending) { queued = callback; return; }
+      return callback();
+    }).catch(() => {});
+  };
   return {
-    invalidate: () => { sequence += 1; },
+    get pending() { return pending; },
+    schedule,
+    invalidate: () => { sequence += 1; scope += 1; pending = false; queued = null; },
     run: async (request, apply) => {
       const current = ++sequence;
-      const value = await request();
-      if (current !== sequence) return false;
-      apply(value);
-      return true;
+      pending = true;
+      try {
+        const value = await request();
+        if (current !== sequence) return false;
+        apply(value);
+        return true;
+      } finally {
+        if (current === sequence) {
+          pending = false;
+          const callback = queued; queued = null;
+          if (callback) schedule(callback);
+          onIdle();
+        }
+      }
     },
   };
 }

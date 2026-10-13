@@ -36,3 +36,23 @@ describe('createLatestRequest', () => {
     assert.deepEqual(applied, []);
   });
 });
+
+it('coalesces refreshes during an active request and drains the latest after completion', async () => {
+  const latest = createLatestRequest();
+  let release; const applied = [];
+  const first = latest.run(() => new Promise(resolve => { release = resolve; }), value => applied.push(value));
+  latest.schedule(() => latest.run(async () => 'obsolete refresh', value => applied.push(value)));
+  latest.schedule(() => latest.run(async () => 'fresh refresh', value => applied.push(value)));
+  release('first'); await first; await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(applied, ['first', 'fresh refresh']);
+});
+
+it('invalidating navigation drops a queued refresh from the old view', async () => {
+  const latest = createLatestRequest(); let release; const applied = [];
+  const old = latest.run(() => new Promise(resolve => { release = resolve; }), value => applied.push(value));
+  latest.schedule(() => latest.run(async () => 'old mailbox', value => applied.push(value)));
+  latest.invalidate();
+  await latest.run(async () => 'new mailbox', value => applied.push(value));
+  release('obsolete'); await old; await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(applied, ['new mailbox']);
+});
