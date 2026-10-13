@@ -1,3 +1,4 @@
+import { inboxUnreadDelta, adjustInboxTransition } from '../utils/actionCounts.js';
 import ConnectionStatus from './ConnectionStatus.jsx';
 import { formatDateTime } from '../utils/formatDate.js';
 import { useEffect, useLayoutEffect, useState, useRef, useCallback, useMemo } from 'react';
@@ -231,16 +232,16 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
   // here so the MessagePane doesn't need to reach into MessageList internals.
   const performSingleSpamLabel = useCallback(async (label) => {
     if (!message) return;
-    const wasUnread = !message.is_read;
+    const destination = label === 'ham' ? 'INBOX' : null;
     advanceSelectionAfterRemoval(message.id);
     removeMessage(message.id);
     closeWindowIfWindowed();
-    if (wasUnread) decrementUnread(message.account_id);
+    adjustInboxTransition(message, destination, incrementUnread, decrementUnread);
     let settled = false;
     const undo = () => {
       settled = true;
       useStore.getState().restoreMessages([message]);
-      if (wasUnread) incrementUnread(message.account_id);
+      adjustInboxTransition(message, destination, incrementUnread, decrementUnread, true);
     };
     setTimeout(async () => {
       if (settled) return;
@@ -249,7 +250,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
         await fn(message.id);
       } catch (err) {
         useStore.getState().restoreMessages([message]);
-        if (wasUnread) incrementUnread(message.account_id);
+        adjustInboxTransition(message, destination, incrementUnread, decrementUnread, true);
         addNotification({
           type: 'error',
           title: t(label === 'spam' ? 'spam.failTitle' : 'spam.failHamTitle'),
@@ -722,7 +723,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
             if (markReadBehavior !== 'manual') {
               const doMarkRead = () => {
                 updMsg(target.id, { is_read: true });
-                decUnread(target.account_id);
+                decUnread(target.account_id, inboxUnreadDelta(target));
                 adjCat(target.category, -1, target);
                 setPending(target.id, target.account_id);
                 api.bulkRead([target.id], true)
@@ -734,7 +735,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
                   .catch(e => {
                     console.error('markRead failed:', e.message);
                     updMsg(target.id, { is_read: false });
-                    incUnread(target.account_id);
+                    incUnread(target.account_id, inboxUnreadDelta(target));
                     adjCat(target.category, 1, target);
                     pendingMarkReadMap.delete(target.id);
                   });
@@ -1044,7 +1045,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
     advanceSelectionAfterRemoval(moved.id);
     removeMessage(moved.id);
     closeWindowIfWindowed();
-    if (!moved.is_read) decrementUnread(moved.account_id);
+    adjustInboxTransition(moved, folder, incrementUnread, decrementUnread);
     let undone = false;
     const timer = setTimeout(async () => {
       if (undone) return;
@@ -1057,7 +1058,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
         clearDeleteGuard(moved.id);
         console.error('Move failed:', err);
         useStore.getState().restoreMessages([moved]);
-        if (!moved.is_read) incrementUnread(moved.account_id);
+        adjustInboxTransition(moved, folder, incrementUnread, decrementUnread, true);
         addNotification({ title: t('message.moved.failTitle'), body: t('message.moved.failBody') });
       }
     }, 4500);
@@ -1069,7 +1070,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
         clearTimeout(timer);
         clearDeleteGuard(moved.id);
         useStore.getState().restoreMessages([moved]);
-        if (!moved.is_read) incrementUnread(moved.account_id);
+        adjustInboxTransition(moved, folder, incrementUnread, decrementUnread, true);
       },
     });
   }, [message, removeMessage, decrementUnread, incrementUnread, addNotification, t, closeWindowIfWindowed]);
@@ -1164,7 +1165,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
     advanceSelectionAfterRemoval(deleted.id);
     removeMessage(deleted.id);
     closeWindowIfWindowed();
-    if (!deleted.is_read) decrementUnread(deleted.account_id);
+    if (!deleted.is_read) decrementUnread(deleted.account_id, inboxUnreadDelta(deleted, 1));
     let undone = false;
     const timer = setTimeout(async () => {
       if (undone) return;
@@ -1174,7 +1175,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
       } catch {
         clearDeleteGuard(deleted.id);
         useStore.getState().restoreMessages([deleted]);
-        if (!deleted.is_read) incrementUnread(deleted.account_id);
+        if (!deleted.is_read) incrementUnread(deleted.account_id, inboxUnreadDelta(deleted, 1));
         addNotification({ type: 'error', title: t('messageList.deleted.failTitle'), body: t('messageList.deleted.failBody') });
       }
     }, 4500);
@@ -1186,7 +1187,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
         clearTimeout(timer);
         clearPendingDelete(deleted.id);
         useStore.getState().restoreMessages([deleted]);
-        if (!deleted.is_read) incrementUnread(deleted.account_id);
+        if (!deleted.is_read) incrementUnread(deleted.account_id, inboxUnreadDelta(deleted, 1));
       },
     });
   };
@@ -1198,7 +1199,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
     advanceSelectionAfterRemoval(archived.id);
     removeMessage(archived.id);
     closeWindowIfWindowed();
-    if (!archived.is_read) decrementUnread(archived.account_id);
+    if (!archived.is_read) decrementUnread(archived.account_id, inboxUnreadDelta(archived, 1));
     let undone = false;
     const timer = setTimeout(async () => {
       if (undone) return;
@@ -1208,7 +1209,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
         else {
           clearDeleteGuard(archived.id);
           useStore.getState().restoreMessages([archived]);
-          if (!archived.is_read) incrementUnread(archived.account_id);
+          if (!archived.is_read) incrementUnread(archived.account_id, inboxUnreadDelta(archived, 1));
         }
         if (result.noArchiveFolder?.length) {
           addNotification({ title: t('message.archived.noFolderTitle'), body: t('message.archived.noFolderBody') });
@@ -1216,7 +1217,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
       } catch (err) {
         clearDeleteGuard(archived.id);
         useStore.getState().restoreMessages([archived]);
-        if (!archived.is_read) incrementUnread(archived.account_id);
+        if (!archived.is_read) incrementUnread(archived.account_id, inboxUnreadDelta(archived, 1));
         console.error('Archive failed:', err);
         addNotification({ title: t('message.archived.failTitle'), body: t('message.archived.failBody') });
       }
@@ -1230,7 +1231,7 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
         clearDeleteGuard(archived.id);
         const state = useStore.getState();
         state.setMessages([...state.messages, archived].sort((a, b) => new Date(b.date) - new Date(a.date)));
-        if (!archived.is_read) incrementUnread(archived.account_id);
+        if (!archived.is_read) incrementUnread(archived.account_id, inboxUnreadDelta(archived, 1));
       },
     });
   };
@@ -1315,12 +1316,12 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
           advanceSelectionAfterRemoval(snoozedMsg.id);
           removeMessage(snoozedMsg.id);
           closeWindowIfWindowed();
-          if (!snoozedMsg.is_read) decrementUnread(snoozedMsg.account_id);
+          if (!snoozedMsg.is_read) decrementUnread(snoozedMsg.account_id, inboxUnreadDelta(snoozedMsg, 1));
           addNotification({ title: t('message.snoozed.title'), body: snoozedMsg.subject || t('common.noSubject') });
           api.snoozeMessage(snoozedMsg.id, data).catch(err => {
             console.error('Snooze failed:', err.message);
             useStore.getState().restoreMessages([snoozedMsg]);
-            if (!snoozedMsg.is_read) incrementUnread(snoozedMsg.account_id);
+            if (!snoozedMsg.is_read) incrementUnread(snoozedMsg.account_id, inboxUnreadDelta(snoozedMsg, 1));
             addNotification({ title: t('message.snoozed.failTitle'), body: t('message.snoozed.failBody') });
           });
         }
@@ -1414,10 +1415,10 @@ export default function MessagePane({ windowMessageId = null, onWindowClose = nu
           const { removeMessage, decrementUnread, restoreMessages, incrementUnread } = useStore.getState();
           advanceSelectionAfterRemoval(msg.id);
           removeMessage(msg.id);
-          if (!msg.is_read) decrementUnread(msg.account_id);
+          if (!msg.is_read) decrementUnread(msg.account_id, inboxUnreadDelta(msg, 1));
           api.deleteMessage(msg.id).catch(() => {
             restoreMessages([msg]);
-            if (!msg.is_read) incrementUnread(msg.account_id);
+            if (!msg.is_read) incrementUnread(msg.account_id, inboxUnreadDelta(msg, 1));
           });
         },
       });

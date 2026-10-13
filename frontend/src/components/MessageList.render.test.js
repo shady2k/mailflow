@@ -882,3 +882,29 @@ test('search live region reserves space only for an active query', async () => {
   await querySearch('   ');
   assert.equal(region().style.height, '0px');
 });
+
+test('Archive read/unread and archive Undo do not charge the account INBOX', async () => {
+  const row = { ...MESSAGE, id: 'synthetic-filed', folder: 'Archive', is_read: true };
+  await mount({ rows: [row], threadedView: false, folder: 'Archive' });
+  await React.act(async () => useStore.setState({
+    selectedMessageId: row.id,
+    pendingCounts: {},
+    serverUnreadCounts: { total: 2, byAccount: { 'acct-1': 2 }, snapshots: {} },
+    unreadCounts: { total: 2, byAccount: { 'acct-1': 2 }, snapshots: {} },
+  }));
+  const clock = captureUndoCommits();
+  try {
+    await React.act(async () => shortcutBus.emit('markUnread'));
+    assert.equal(useStore.getState().messages.find(message => message.id === row.id).is_read, false);
+    assert.equal(useStore.getState().unreadCounts.byAccount['acct-1'], 2, 'Archive unread is not INBOX unread');
+    await React.act(async () => shortcutBus.emit('archive'));
+    assert.equal(useStore.getState().unreadCounts.byAccount['acct-1'], 2, 'off-INBOX archive cannot decrement INBOX');
+    const notification = useStore.getState().notifications.filter(item => item.onUndo).at(-1);
+    await React.act(async () => notification.onUndo());
+    assert.equal(useStore.getState().unreadCounts.byAccount['acct-1'], 2, 'Undo returns only the actual debit');
+  } finally {
+    clock.restore();
+    deleteGuards.clearDeleteGuard(row.id);
+    await React.act(async () => root.unmount()); root = null;
+  }
+});

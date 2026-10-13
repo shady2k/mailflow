@@ -85,9 +85,9 @@ describe('unreadCountsByAccount', () => {
   it('groups only unread archive targets by account', () => {
     assert.deepEqual(
       [...unreadCountsByAccount([
-        { account_id: 'account-1', is_read: false },
-        { account_id: 'account-1', is_read: true },
-        { account_id: 'account-2', is_read: false },
+        { id: 'one', account_id: 'account-1', folder: 'INBOX', is_read: false },
+        { id: 'two', account_id: 'account-1', folder: 'INBOX', is_read: true },
+        { id: 'three', account_id: 'account-2', folder: 'INBOX', is_read: false },
       ])],
       [['account-1', 1], ['account-2', 1]],
     );

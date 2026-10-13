@@ -1,3 +1,4 @@
+import { inboxUnreadCounts } from './actionCounts.js';
 export function findVisibleArchiveMessage(messages, selectedMessageId, threadMessages = {}) {
   if (!selectedMessageId || !Array.isArray(messages)) return null;
   const direct = messages.find(message => message?.id === selectedMessageId);
@@ -103,12 +104,7 @@ export async function archiveInChunks(ids, archive, chunkSize = 500) {
 }
 
 export function unreadCountsByAccount(messages) {
-  const counts = new Map();
-  for (const message of Array.isArray(messages) ? messages : []) {
-    if (!message?.account_id || message.is_read) continue;
-    counts.set(message.account_id, (counts.get(message.account_id) || 0) + 1);
-  }
-  return counts;
+  return inboxUnreadCounts(messages);
 }
 
 export function currentThreadLoadVersion(versions, threadId) {

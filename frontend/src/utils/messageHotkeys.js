@@ -1,3 +1,4 @@
+import { inboxUnreadDelta } from './actionCounts.js';
 // Resolve the selected row across the ordinary list, search, deep-link stash,
 // and GTD rail. GTD copies may not exist in the current mailbox's messages.
 export function selectedMessage(state) {
@@ -22,12 +23,12 @@ export function markMessageUnread(message, { cancel, update, incrementUnread, de
   cancel?.();
   if (!message.is_read) return true;
   update?.(message.id, { is_read: false });
-  incrementUnread?.(message.account_id);
+  incrementUnread?.(message.account_id, inboxUnreadDelta(message, 1));
   adjustCategoryCount?.(message.category, 1, message);
   void Promise.resolve(patch?.([message.id], false)).catch(error => {
     console.error('markUnread failed:', error?.message);
     update?.(message.id, { is_read: true });
-    decrementUnread?.(message.account_id);
+    decrementUnread?.(message.account_id, inboxUnreadDelta(message, 1));
     adjustCategoryCount?.(message.category, -1, message);
   });
   return true;

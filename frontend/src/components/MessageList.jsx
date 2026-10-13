@@ -1,3 +1,4 @@
+import { inboxUnreadDelta, adjustInboxTransition } from '../utils/actionCounts.js';
 import ConnectionStatus from './ConnectionStatus.jsx';
 import { registerConnectionRefresh } from '../utils/connectionRefresh.js';
 import { categoryRequestState, hasPendingCategoryRemoval } from '../utils/categoryMutations.js';
@@ -921,7 +922,8 @@ export default function MessageList() {
     // Use the row's own unread_count as the immediate estimate.
     // For thread rows this is the aggregate already present on the row;
     // for single messages it is always 1 (or 0 if already in the target state).
-    const estimatedDelta = isThreadRow && Number.isFinite(unreadCount) ? unreadCount : 1;
+    const estimatedDelta = isThreadRow && Number.isFinite(unreadCount) ? unreadCount : (message.is_read === read ? 0 : 1);
+    const estimatedInboxDelta = isThreadRow ? 0 : inboxUnreadDelta(message, estimatedDelta);
 
     // Immediate optimistic update — do not wait for thread resolution.
     // For unexpanded thread rows this avoids a visible delay caused by the
@@ -936,12 +938,12 @@ export default function MessageList() {
     }
     if (read) {
       if (estimatedDelta > 0) {
-        decrementUnread(message.account_id, estimatedDelta);
+        decrementUnread(message.account_id, estimatedInboxDelta);
         adjustCategoryCount(message.category, -estimatedDelta, message);
       }
     } else {
       if (estimatedDelta > 0) {
-        incrementUnread(message.account_id, estimatedDelta);
+        incrementUnread(message.account_id, estimatedInboxDelta);
         adjustCategoryCount(message.category, estimatedDelta, message);
       }
     }
@@ -960,8 +962,8 @@ export default function MessageList() {
       } else {
         updateMessage(message.id, { is_read: !read, unread_count: !read ? 0 : 1 });
       }
-      if (read && estimatedDelta > 0) { incrementUnread(message.account_id, estimatedDelta); adjustCategoryCount(message.category, estimatedDelta, message); }
-      else if (!read && estimatedDelta > 0) { decrementUnread(message.account_id, estimatedDelta); adjustCategoryCount(message.category, -estimatedDelta, message); }
+      if (read && estimatedDelta > 0) { incrementUnread(message.account_id, estimatedInboxDelta); adjustCategoryCount(message.category, estimatedDelta, message); }
+      else if (!read && estimatedDelta > 0) { decrementUnread(message.account_id, estimatedInboxDelta); adjustCategoryCount(message.category, -estimatedDelta, message); }
       return;
     }
 
@@ -972,7 +974,7 @@ export default function MessageList() {
     // And its split by account. With conversations on, a thread row can hold another
     // account's copy of the same email (#476); that copy's unread belongs to THAT account's
     // badge, while the estimate above had to charge the whole row to the row's own account.
-    const actualByAccount = unreadDeltaByAccount(actionMessages, read, message.account_id);
+    const actualByAccount = unreadDeltaByAccount(actionMessages.filter(msg => msg.folder === 'INBOX'), read, message.account_id);
 
     // Now update the thread cache and correct the parent row if our estimate was off.
     if (isThreadRow) {
@@ -985,7 +987,7 @@ export default function MessageList() {
     // Correct the sidebar badges per account: each account's actual change, minus what the
     // estimate already charged to it (all of it went to the row's own account, none elsewhere).
     for (const accountId of new Set([message.account_id, ...actualByAccount.keys()])) {
-      const diff = (actualByAccount.get(accountId) || 0) - (accountId === message.account_id ? estimatedDelta : 0);
+      const diff = (actualByAccount.get(accountId) || 0) - (accountId === message.account_id ? estimatedInboxDelta : 0);
       if (diff === 0) continue;
       if (read) {
         if (diff > 0) decrementUnread(accountId, diff);
@@ -1100,11 +1102,8 @@ export default function MessageList() {
     removeMessage(visibleMessage.id);
     if (expandedThreadId === tid) setExpandedThreadId(null);
 
-    const unreadCount = Number.parseInt(message.unread_count, 10);
-    const unreadDelta = Number.isFinite(unreadCount)
-      ? unreadCount
-      : deleteMessages.filter(msg => !msg.is_read).length;
-    if (unreadDelta > 0) decrementUnread(message.account_id, unreadDelta);
+    const unreadByAccount = unreadCountsByAccount(deleteMessages);
+    unreadByAccount.forEach((count, accountId) => decrementUnread(accountId, count));
 
     const timer = setTimeout(async () => {
       pendingDeleteTimers.current.delete(key);
@@ -1116,9 +1115,9 @@ export default function MessageList() {
           const failedIds = ids.filter(id => !deletedSet.has(id));
           if (failedIds.length > 0) {
             const idToMsg = new Map(deleteMessages.map(m => [m.id, m]));
-            const failedUnreadDelta = failedIds.filter(id => idToMsg.has(id) && !idToMsg.get(id).is_read).length;
+            const failedUnreadByAccount = unreadCountsByAccount(failedIds.map(id => idToMsg.get(id)));
             restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, [visibleMessage]);
-            if (failedUnreadDelta > 0) incrementUnread(message.account_id, failedUnreadDelta);
+            failedUnreadByAccount.forEach((count, accountId) => incrementUnread(accountId, count));
             addNotification({
               type: 'error',
               title: t('messageList.bulkDeleted.failTitle'),
@@ -1132,7 +1131,7 @@ export default function MessageList() {
       } catch {
         ids.forEach((id) => clearDeleteGuard(id));
         restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, [visibleMessage]);
-        if (unreadDelta > 0) incrementUnread(message.account_id, unreadDelta);
+        unreadByAccount.forEach((count, accountId) => incrementUnread(accountId, count));
         addNotification({
           type: 'error',
           title: ids.length > 1 ? t('messageList.bulkDeleted.failTitle') : t('messageList.deleted.failTitle'),
@@ -1151,7 +1150,7 @@ export default function MessageList() {
         pendingDeleteTimers.current.delete(key);
         ids.forEach((id) => clearPendingDelete(id));
         restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, [visibleMessage]);
-        if (unreadDelta > 0) incrementUnread(message.account_id, unreadDelta);
+        unreadByAccount.forEach((count, accountId) => incrementUnread(accountId, count));
       },
     });
   }, [
@@ -1180,10 +1179,9 @@ export default function MessageList() {
     const isBulk = ids.length > 1;
 
     // Optimistic local update: remove from view + drop unread badge.
-    const unreadCount = messages.reduce((sum, m) => sum + (m.is_read ? 0 : 1), 0);
-    const accountId = messages[0].account_id;
+    const destination = label === 'ham' ? 'INBOX' : null;
     messages.forEach(m => removeMessage(m.id));
-    if (unreadCount > 0) decrementUnread(accountId, unreadCount);
+    messages.forEach(msg => adjustInboxTransition(msg, destination, incrementUnread, decrementUnread));
 
     // Sidebar folder badges are not adjusted here. They render the counts the IMAP server
     // reported for each folder, so a local guess would be overwritten by the next observation
@@ -1199,7 +1197,7 @@ export default function MessageList() {
       timers.clear();
       // Restore the messages in their original position (re-sort by date).
       useStore.getState().restoreMessages(messages);
-      if (unreadCount > 0) incrementUnread(accountId, unreadCount);
+      messages.forEach(msg => adjustInboxTransition(msg, destination, incrementUnread, decrementUnread, true));
     };
 
     const performCall = (id) => {
@@ -1218,8 +1216,7 @@ export default function MessageList() {
       if (failed.length) {
         const failedMsgs = messages.filter(m => failed.includes(m.id));
         useStore.getState().restoreMessages(failedMsgs);
-        const failedUnread = failedMsgs.reduce((sum, m) => sum + (m.is_read ? 0 : 1), 0);
-        if (failedUnread > 0) incrementUnread(accountId, failedUnread);
+        failedMsgs.forEach(msg => adjustInboxTransition(msg, destination, incrementUnread, decrementUnread, true));
         const titleKey = label === 'spam' ? 'spam.failTitle' : 'spam.failHamTitle';
         const bodyKey = label === 'spam' ? 'spam.failBody' : 'spam.failHamBody';
         addNotification({
@@ -1234,7 +1231,9 @@ export default function MessageList() {
       // moving messages between two folders that share a parent, or a
       // concurrent IMAP IDLE update, can desync the local counters.
       api.getUnreadCounts().then(c => useStore.getState().setUnreadCounts(c)).catch(() => {});
-      api.getFolders(accountId).then(f => useStore.getState().setFolders(accountId, f)).catch(() => {});
+      [...new Set(messages.map(msg => msg.account_id))].forEach(accountId => {
+        api.getFolders(accountId).then(f => useStore.getState().setFolders(accountId, f)).catch(() => {});
+      });
     }, 4500));
 
     addNotification({
@@ -1334,11 +1333,8 @@ export default function MessageList() {
     advanceSelectionAfterRemoval(message.id);
     removeMessage(message.id);
     if (threadRow && expandedThreadId === threadId) setExpandedThreadId(null);
-    const aggregateUnread = Number.parseInt(message.unread_count, 10);
-    const optimisticUnread = threadRow && Number.isFinite(aggregateUnread)
-      ? aggregateUnread
-      : (message.is_read ? 0 : 1);
-    if (optimisticUnread > 0) decrementUnread(message.account_id, optimisticUnread);
+    const optimisticUnread = threadRow ? 0 : inboxUnreadDelta(message, message.is_read ? 0 : 1);
+    if (optimisticUnread > 0) decrementUnread(message.account_id, inboxUnreadDelta(message, optimisticUnread));
     const archiveAction = createUndoableCommit({
       delayMs: UNDO_COMMIT_DELAY_MS,
       commit: async () => {
@@ -1348,7 +1344,7 @@ export default function MessageList() {
       undo: () => {
         guards.forEach(clearDeleteGuard);
         restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, [message]);
-        if (optimisticUnread > 0) incrementUnread(message.account_id, optimisticUnread);
+        if (optimisticUnread > 0) incrementUnread(message.account_id, inboxUnreadDelta(message, optimisticUnread));
       },
     });
     addNotification({
@@ -1616,10 +1612,8 @@ export default function MessageList() {
     if (shouldPrefetchSearch) {
       prefetchSearchAfterRemoval(searchOffsetBeforeRemoval);
     }
-    msgs.forEach(msg => {
-      const delta = parseInt(msg.unread_count) || (msg.is_read ? 0 : 1);
-      if (delta > 0) decrementUnread(msg.account_id, delta);
-    });
+    const unreadByAccount = unreadCountsByAccount(deleteTargets);
+    unreadByAccount.forEach((count, accountId) => decrementUnread(accountId, count));
     setSelectedIds(new Set());
     setSelectionModeActive(false);
     setShowFolderPicker(false);
@@ -1643,10 +1637,8 @@ export default function MessageList() {
         const failedSet = new Set(failedIds);
         const failedMsgs = msgs.filter(msg => failedSet.has(msg.id));
         restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, failedMsgs);
-        failedMsgs.forEach(msg => {
-          const delta = parseInt(msg.unread_count) || (msg.is_read ? 0 : 1);
-          if (delta > 0) incrementUnread(msg.account_id, delta);
-        });
+        unreadCountsByAccount(deleteTargets.filter(msg => failedSet.has(msg.id)))
+          .forEach((count, accountId) => incrementUnread(accountId, count));
         addNotification({ type: 'error', title: t('messageList.bulkDeleted.failTitle'), body: t('messageList.bulkDeleted.failBody', { count: failedIds.length }) });
       }
       if (useStore.getState().searchQuery.trim()) {
@@ -1663,10 +1655,7 @@ export default function MessageList() {
         pendingDeleteTimers.current.delete(key);
         deleteIds.forEach(id => clearPendingDelete(id));
         restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, msgs);
-        msgs.forEach(msg => {
-          const delta = parseInt(msg.unread_count) || (msg.is_read ? 0 : 1);
-          if (delta > 0) incrementUnread(msg.account_id, delta);
-        });
+        unreadByAccount.forEach((count, accountId) => incrementUnread(accountId, count));
       },
     });
   }, [searchHasMore, removeMessage, prefetchSearchAfterRemoval, resolveMessagesForThreadAction, decrementUnread, incrementUnread, addNotification, t]);
@@ -1687,7 +1676,7 @@ export default function MessageList() {
         const thread = keepDraftsApart(await resolveMessagesForThreadAction(m), m.id);
         return thread.filter(tm => tm?.account_id === m.account_id);
       }));
-      moveTargets = resolved.flat();
+      moveTargets = [...new Map(resolved.flat().map(message => [message.id, message])).values()];
       moveIds = [...new Set([...ids, ...moveTargets.map(m => m?.id).filter(Boolean)])];
     } catch (err) {
       console.error('Failed to load thread for bulk move:', err.message);
@@ -1695,7 +1684,7 @@ export default function MessageList() {
     moveIds.forEach(setPendingDelete);
     useStore.getState().stageCategoryRemovals(folder === 'INBOX' ? [] : moveTargets);
     ids.forEach(id => removeMessage(id));
-    msgs.forEach(msg => { if (!msg.is_read) decrementUnread(msg.account_id); });
+    moveTargets.forEach(msg => adjustInboxTransition(msg, folder, incrementUnread, decrementUnread));
     setSelectedIds(new Set());
     setSelectionModeActive(false);
     setShowFolderPicker(false);
@@ -1709,6 +1698,7 @@ export default function MessageList() {
         const failedCount = moveIds.filter(id => !movedSet.has(id)).length;
         if (failedCount > 0) {
           const failedMsgs = msgs.filter(msg => !movedSet.has(msg.id));
+          moveTargets.filter(msg => !movedSet.has(msg.id)).forEach(msg => adjustInboxTransition(msg, folder, incrementUnread, decrementUnread, true));
           if (failedMsgs.length > 0) restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, failedMsgs);
           addNotification({ title: t('messageList.bulkMoved.failTitle'), body: t('messageList.bulkMoved.failBody', { count: failedCount }) });
         } else if (msgs[0]?.account_id) {
@@ -1717,6 +1707,7 @@ export default function MessageList() {
       } catch (err) {
         moveIds.forEach(id => clearDeleteGuard(id));
         console.error('Bulk move failed:', err);
+        moveTargets.forEach(msg => adjustInboxTransition(msg, folder, incrementUnread, decrementUnread, true));
         restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, msgs);
         addNotification({ title: t('messageList.bulkMoved.failTitle'), body: t('messageList.bulkMoved.failBody', { count: moveIds.length }) });
       }
@@ -1729,7 +1720,7 @@ export default function MessageList() {
         clearTimeout(timer);
         moveIds.forEach(id => clearDeleteGuard(id));
         restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, msgs);
-        msgs.forEach(msg => { if (!msg.is_read) incrementUnread(msg.account_id); });
+        moveTargets.forEach(msg => adjustInboxTransition(msg, folder, incrementUnread, decrementUnread, true));
       },
     });
   }, [removeMessage, decrementUnread, incrementUnread, resolveMessagesForThreadAction, addNotification, t]);
@@ -1779,12 +1770,9 @@ export default function MessageList() {
     removeMessages(ids);
     let unreadByAccount = new Map();
     msgs.forEach((message) => {
-      const aggregateUnread = Number.parseInt(message.unread_count, 10);
-      const count = isThreadListRow(message) && Number.isFinite(aggregateUnread)
-        ? aggregateUnread
-        : (message.is_read ? 0 : 1);
+      const count = isThreadListRow(message) ? 0 : inboxUnreadDelta(message, message.is_read ? 0 : 1);
       if (count <= 0) return;
-      decrementUnread(message.account_id, count);
+      decrementUnread(message.account_id, inboxUnreadDelta(message, count));
       unreadByAccount.set(message.account_id, (unreadByAccount.get(message.account_id) || 0) + count);
     });
     setSelectedIds(new Set());
@@ -1901,12 +1889,9 @@ export default function MessageList() {
       if (threadRow && expandedThreadId === threadId) setExpandedThreadId(null);
     }
 
-    const aggregateUnread = Number.parseInt(message.unread_count, 10);
-    const optimisticUnread = threadRow && Number.isFinite(aggregateUnread)
-      ? aggregateUnread
-      : (message.is_read ? 0 : 1);
+    const optimisticUnread = threadRow ? 0 : inboxUnreadDelta(message, message.is_read ? 0 : 1);
     let unreadByAccount = new Map();
-    if (!alreadyRemoved && optimisticUnread > 0) decrementUnread(message.account_id, optimisticUnread);
+    if (!alreadyRemoved && optimisticUnread > 0) decrementUnread(message.account_id, inboxUnreadDelta(message, optimisticUnread));
     if (optimisticUnread > 0) unreadByAccount.set(message.account_id, optimisticUnread);
 
     let targets;
@@ -1977,6 +1962,7 @@ export default function MessageList() {
     // Compute per-account and per-category unread deltas before mutating state
     const deltaByAccount = {};
     msgs.forEach(msg => {
+      if (msg.folder !== 'INBOX') return;
       if (!deltaByAccount[msg.account_id]) deltaByAccount[msg.account_id] = 0;
       if (markAsRead && !msg.is_read) { deltaByAccount[msg.account_id]++; }
       if (!markAsRead && msg.is_read) { deltaByAccount[msg.account_id]++; }
@@ -2045,7 +2031,7 @@ export default function MessageList() {
       autoMarkReadTimerRef.current = null;
       const doMarkRead = () => {
         updateMessage(msg.id, { is_read: true });
-        decrementUnread(msg.account_id);
+        decrementUnread(msg.account_id, inboxUnreadDelta(msg, 1));
         adjustCategoryCount(msg.category, -1, msg);
         setPending(msg.id, msg.account_id);
         api.bulkRead([msg.id], true)
@@ -2057,7 +2043,7 @@ export default function MessageList() {
           .catch(e => {
             console.error('markRead failed:', e.message);
             updateMessage(msg.id, { is_read: false });
-            incrementUnread(msg.account_id);
+            incrementUnread(msg.account_id, inboxUnreadDelta(msg, 1));
             adjustCategoryCount(msg.category, 1, msg);
             pendingMarkReadMap.delete(msg.id);
           });
@@ -2147,7 +2133,7 @@ export default function MessageList() {
       const newRead = !msg.is_read;
       updateMessage(selectedMessageId, { is_read: newRead });
       if (newRead) {
-        decrementUnread(msg.account_id);
+        decrementUnread(msg.account_id, inboxUnreadDelta(msg, 1));
         adjustCategoryCount(msg.category, -1, msg);
         setPending(selectedMessageId, msg.account_id);
         api.bulkRead([selectedMessageId], true)
@@ -2161,7 +2147,7 @@ export default function MessageList() {
             pendingMarkReadMap.delete(selectedMessageId);
           });
       } else {
-        incrementUnread(msg.account_id);
+        incrementUnread(msg.account_id, inboxUnreadDelta(msg, 1));
         adjustCategoryCount(msg.category, 1, msg);
         pendingMarkReadMap.delete(selectedMessageId);
         completedMarkReadMap.delete(selectedMessageId);
@@ -2364,11 +2350,8 @@ export default function MessageList() {
         advanceSelectionAfterRemoval(archived.id);
         removeMessage(archived.id);
         if (threadRow && expandedThreadId === threadId) setExpandedThreadId(null);
-        const aggregateUnread = Number.parseInt(archived.unread_count, 10);
-        const optimisticUnread = threadRow && Number.isFinite(aggregateUnread)
-          ? aggregateUnread
-          : (archived.is_read ? 0 : 1);
-        if (optimisticUnread > 0) decrementUnread(archived.account_id, optimisticUnread);
+        const optimisticUnread = threadRow ? 0 : inboxUnreadDelta(archived, archived.is_read ? 0 : 1);
+        if (optimisticUnread > 0) decrementUnread(archived.account_id, inboxUnreadDelta(archived, optimisticUnread));
         const archiveAction = createUndoableCommit({
           delayMs: UNDO_COMMIT_DELAY_MS,
           commit: async () => {
@@ -2378,7 +2361,7 @@ export default function MessageList() {
           undo: () => {
             guards.forEach(clearDeleteGuard);
             restoreMessagesIfViewCurrent(viewKey, archiveViewKeyRef, [archived]);
-            if (optimisticUnread > 0) incrementUnread(archived.account_id, optimisticUnread);
+            if (optimisticUnread > 0) incrementUnread(archived.account_id, inboxUnreadDelta(archived, optimisticUnread));
           },
         });
         addNotification({
@@ -2419,7 +2402,7 @@ export default function MessageList() {
         moveIds.forEach(setPendingDelete);
         useStore.getState().stageCategoryRemovals(moveMessages);
         removeMessage(moved.id);
-        if (!moved.is_read) decrementUnread(moved.account_id);
+        moveMessages.forEach(msg => adjustInboxTransition(msg, folder, incrementUnread, decrementUnread));
         // Remove the moved message from the selection so the action bar doesn't
         // stay around claiming "X selected" for messages that are no longer here.
         if (selectedIds.has(moved.id)) {
@@ -2440,9 +2423,10 @@ export default function MessageList() {
             moveIds.forEach(id => movedSet.has(id) ? setCompletedDelete(id) : clearDeleteGuard(id));
             const failedCount = moveIds.filter(id => !movedSet.has(id)).length;
             if (failedCount > 0) {
+              moveMessages.filter(msg => !movedSet.has(msg.id)).forEach(msg => adjustInboxTransition(msg, folder, incrementUnread, decrementUnread, true));
               if (!movedSet.has(moved.id)) {
                 useStore.getState().restoreMessages([moved]);
-                if (!moved.is_read) incrementUnread(moved.account_id);
+
               }
               addNotification({ type: 'error', title: t('message.moved.failTitle'), body: t('messageList.bulkMoved.failBody', { count: failedCount }) });
             } else {
@@ -2452,7 +2436,7 @@ export default function MessageList() {
             moveIds.forEach(id => clearDeleteGuard(id));
             console.error('Move failed:', err.message);
             useStore.getState().restoreMessages([moved]);
-            if (!moved.is_read) incrementUnread(moved.account_id);
+            moveMessages.forEach(msg => adjustInboxTransition(msg, folder, incrementUnread, decrementUnread, true));
             addNotification({ title: t('message.moved.failTitle'), body: t('message.moved.failBody') });
           }
         }, 4500);
@@ -2464,7 +2448,7 @@ export default function MessageList() {
             clearTimeout(moveTimer);
             moveIds.forEach(id => clearDeleteGuard(id));
             useStore.getState().restoreMessages([moved]);
-            if (!moved.is_read) incrementUnread(moved.account_id);
+            moveMessages.forEach(msg => adjustInboxTransition(msg, folder, incrementUnread, decrementUnread, true));
           },
         });
         break;
@@ -2474,7 +2458,7 @@ export default function MessageList() {
         const untilIso = data;
         if (!untilIso) break;
         removeMessage(snoozedMsg.id);
-        if (!snoozedMsg.is_read) decrementUnread(snoozedMsg.account_id);
+        if (!snoozedMsg.is_read) decrementUnread(snoozedMsg.account_id, inboxUnreadDelta(snoozedMsg, 1));
         if (selectedIds.has(snoozedMsg.id)) {
           const next = new Set(selectedIds);
           next.delete(snoozedMsg.id);
@@ -2485,7 +2469,7 @@ export default function MessageList() {
         api.snoozeMessage(snoozedMsg.id, untilIso).catch(err => {
           console.error('Snooze failed:', err.message);
           useStore.getState().restoreMessages([snoozedMsg]);
-          if (!snoozedMsg.is_read) incrementUnread(snoozedMsg.account_id);
+          if (!snoozedMsg.is_read) incrementUnread(snoozedMsg.account_id, inboxUnreadDelta(snoozedMsg, 1));
           addNotification({ title: t('message.snoozed.failTitle'), body: t('message.snoozed.failBody') });
         });
         break;
@@ -2676,7 +2660,7 @@ export default function MessageList() {
     const prevUnread = message.unread_count;
     const doMarkRead = () => {
       updateMessage(message.id, { is_read: true, unread_count: 0 });
-      decrementUnread(message.account_id);
+      decrementUnread(message.account_id, inboxUnreadDelta(message, 1));
       adjustCategoryCount(message.category, -1, message);
       setPending(message.id, message.account_id);
       api.bulkRead([message.id], true)
@@ -2689,7 +2673,7 @@ export default function MessageList() {
         .catch(e => {
           console.error('markRead failed:', e.message);
           updateMessage(message.id, { is_read: false, unread_count: prevUnread });
-          incrementUnread(message.account_id);
+          incrementUnread(message.account_id, inboxUnreadDelta(message, 1));
           adjustCategoryCount(message.category, 1, message);
           pendingMarkReadMap.delete(message.id);
         });

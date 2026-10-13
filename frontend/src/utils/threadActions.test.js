@@ -366,3 +366,25 @@ describe('resolveThreadMessages: degenerate responses', () => {
     );
   });
 });
+
+describe('INBOX count scope', () => {
+  test('deleting an unread Archive message leaves account INBOX unchanged', () => {
+    const archived = { ...THREAD[2], folder: 'Archive' };
+    useStore.setState({ pendingCounts: {}, serverUnreadCounts: { total: 2, byAccount: { acct: 2 }, snapshots: {} }, unreadCounts: { total: 2, byAccount: { acct: 2 }, snapshots: {} } });
+    deleteThread([archived], { t, addNotification });
+    try {
+      assert.equal(useStore.getState().unreadCounts.byAccount.acct, 2);
+    } finally {
+      notifications[0].onUndo();
+    }
+    assert.equal(useStore.getState().unreadCounts.byAccount.acct, 2);
+  });
+  test('late resolved unread target is charged once and restored once on failure', async () => {
+    useStore.setState({ pendingCounts: {}, serverUnreadCounts: { total: 2, byAccount: { acct: 2 }, snapshots: {} }, unreadCounts: { total: 2, byAccount: { acct: 2 }, snapshots: {} } });
+    archiveThread([THREAD[2]], { t, addNotification, fetchThread: async () => ({ messages: [THREAD[2], LATE_REPLY] }) });
+    assert.equal(useStore.getState().unreadCounts.byAccount.acct, 1);
+    failNext = true;
+    await tick(UNDO_WINDOW + 100);
+    assert.equal(useStore.getState().unreadCounts.byAccount.acct, 2);
+  });
+});

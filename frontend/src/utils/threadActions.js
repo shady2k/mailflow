@@ -1,3 +1,4 @@
+import { adjustInboxTransition } from './actionCounts.js';
 import { useStore } from '../store/index.js';
 import { api } from './api.js';
 import { normalizeConversation, newestConversationMessage } from './conversation.js';
@@ -58,24 +59,37 @@ export async function resolveThreadMessages({ message, isThreadRow, cached, fetc
 
 const UNDO_WINDOW_MS = 4500;
 
-export function runThreadAction({ messages, commit, resolve, notification, addNotification, onRemove, onRestore }) {
+export function runThreadAction({ messages, commit, resolve, notification, addNotification, onRemove, onRestore, destination = null }) {
   const targets = normalizeConversation(messages);
   if (!targets.length) return;
 
-  const unread = targets.filter(message => !message.is_read);
+  const charged = new Map();
+  const charge = (messages) => {
+    for (const message of messages) {
+      if (charged.has(message.id)) continue;
+      charged.set(message.id, message);
+      const state = useStore.getState();
+      adjustInboxTransition(message, destination, state.incrementUnread, state.decrementUnread);
+    }
+  };
   const store = useStore.getState();
   const view = [store.user?.id, store.selectedAccountId, store.selectedFolder, store.searchQuery];
   targets.forEach(message => setPendingDelete(message.id));
   store.stageCategoryRemovals(targets);
   targets.forEach(message => store.removeMessage(message.id));
-  unread.forEach(message => store.decrementUnread(message.account_id));
+  charge(targets);
   onRemove?.(targets);
 
   const restore = (failed = targets) => {
     const state = useStore.getState();
     failed.forEach(message => clearDeleteGuard(message.id));
     if (JSON.stringify([state.user?.id, state.selectedAccountId, state.selectedFolder, state.searchQuery]) === JSON.stringify(view)) state.restoreMessages(failed);
-    if (state.user?.id === view[0]) failed.filter(message => !message.is_read).forEach(message => state.incrementUnread(message.account_id));
+    if (state.user?.id === view[0]) failed.forEach(message => {
+      const original = charged.get(message.id);
+      if (!original) return;
+      charged.delete(message.id);
+      adjustInboxTransition(original, destination, state.incrementUnread, state.decrementUnread, true);
+    });
     onRestore?.(failed);
   };
 
@@ -87,6 +101,7 @@ export function runThreadAction({ messages, commit, resolve, notification, addNo
       // Resolve last, so a message that arrived during the undo window is included.
       const live = resolve ? normalizeConversation(await resolve(targets)) : targets;
       const resolved = live.length ? live : targets;
+      charge(resolved);
       attempted = [...new Map([...targets, ...resolved].map(message => [message.id, message])).values()];
       resolved.forEach(message => setPendingDelete(message.id));
       useStore.getState().stageCategoryRemovals(resolved);
@@ -199,6 +214,7 @@ export function deleteThread(messages, { t, addNotification, fetchThread, anchor
 export function moveThread(messages, folder, { t, addNotification, fetchThread, anchorId }) {
   runThreadAction({
     messages: keepDraftsApart(messages, anchorId),
+    destination: folder,
     addNotification,
     resolve: sparingDrafts(liveThread(fetchThread), anchorId),
     commit: async (targets) => {
