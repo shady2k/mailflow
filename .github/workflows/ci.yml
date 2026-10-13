@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main", "feat/unicode-body-search-and-inbox-layout", "test/integrated-indexing-cache-locale", "fix/search-pending-feedback", "fix/category-total-counts", "fix/systemic-integration-v2"]
+    branches: ["main", "feat/unicode-body-search-and-inbox-layout", "test/integrated-indexing-cache-locale", "fix/search-pending-feedback", "fix/category-total-counts", "fix/systemic-integration-v2", "integration/upstream-20261013"]
   pull_request:
     branches: ["main"]
 
@@ -10,6 +10,19 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      MAILFLOW_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/postgres
 
     steps:
       - uses: actions/checkout@v6
@@ -76,3 +89,18 @@ jobs:
       - name: Audit
         working-directory: frontend
         run: npm audit --omit=dev --audit-level=high
+
+  integration:
+    name: Integration recovery
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - name: Install synthetic transport dependencies
+        run: |
+          npm ci --prefix backend
+          npm ci --prefix frontend
+      - name: Real WS HTTP and multi-client recovery
+        run: node --test scripts/reconnect-transport.test.mjs
