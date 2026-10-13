@@ -4447,21 +4447,8 @@ export class ImapManager {
               // fall back to the inbox if the id is somehow absent.
               url: latest.id ? `/?m=${latest.id}` : '/',
             };
-            // Try to include the total unread count for the home screen badge.
-            // If the query fails for any reason, send the push without it so
-            // notifications are never silently dropped.
-            query(
-              `SELECT COUNT(*)::int AS total FROM messages m
-               JOIN email_accounts a ON a.id = m.account_id
-               WHERE a.user_id = $1 AND a.enabled = true AND m.folder = 'INBOX' AND m.is_read = false AND m.is_deleted = false`,
-              [account.user_id]
-            ).then(r => {
-              sendPushToUser(account.user_id, { ...basePayload, unreadCount: r.rows[0]?.total ?? 0 })
-                .catch(err => console.warn('Push notification error:', err.message));
-            }).catch(() => {
-              sendPushToUser(account.user_id, basePayload)
-                .catch(err => console.warn('Push notification error:', err.message));
-            });
+            sendPushToUser(account.user_id, basePayload)
+              .catch(err => console.warn('Push notification error:', err.message));
           }
           // Pre-warm the body cache for newly arrived messages so clicking one
           // immediately after receipt doesn't require a live IMAP fetch.

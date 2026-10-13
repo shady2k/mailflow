@@ -1,5 +1,5 @@
 import { bodyDiagnostics } from '../services/bodyDiagnostics.js';
-import { STATUS_STALE_MS } from '../services/folderStatus.js';
+import { getUnreadCountSnapshot } from '../services/unreadCountSnapshot.js';
 import { Router } from 'express';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -354,25 +354,9 @@ router.get('/thread/:threadId', (req, res) => getThread(req, res, req.params.thr
 
 // Counts are snapshots independently measured on the IMAP server, never cache tallies.
 router.get('/unread-counts', async (req, res) => {
-  const result = await query(`SELECT a.id AS account_id, a.include_in_unified_inbox,
-      f.server_unread_count AS count, f.server_total_count, f.server_counts_at, f.server_count_revision, f.status_attempt_revision, f.status_error
-    FROM email_accounts a LEFT JOIN folders f ON f.account_id=a.id AND f.path='INBOX'
-    WHERE a.user_id=$1 AND a.enabled`, [req.session.userId]);
-  const byAccount = {}, snapshots = {};
-  let total = 0, complete = true;
-  for (const row of result.rows) {
-    const known = row.count != null && row.server_counts_at != null;
-    const count = known ? Number(row.count) : null;
-    byAccount[row.account_id] = count;
-    const stale = !known || !!row.status_error || Date.now() - new Date(row.server_counts_at).getTime() > STATUS_STALE_MS;
-    snapshots[row.account_id] = { totalCount: known && row.server_total_count != null ? Number(row.server_total_count) : null, revision: row.server_count_revision || '0', attemptRevision: row.status_attempt_revision || row.server_count_revision || '0', observedAt: row.server_counts_at || null, stale, known };
-    if (row.include_in_unified_inbox !== false) {
-      if (known) total += count;
-      if (stale) complete = false;
-    }
-  }
+  const snapshot = await getUnreadCountSnapshot(req.session.userId);
   res.set('Cache-Control', 'no-store');
-  res.json({ total, byAccount, snapshots, complete });
+  res.json(snapshot);
 });
 
 // Hard cap on a live IMAP body fetch. Connection acquisition is already bounded at 30s

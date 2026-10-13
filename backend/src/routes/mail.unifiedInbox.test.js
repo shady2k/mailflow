@@ -56,6 +56,16 @@ describe('GET /api/mail/unread-counts unified total', () => {
     });
   });
 
+  it('identifies the count authority, user, write barrier and badge preference', async () => {
+    query.mockResolvedValueOnce({ rows: [{ account_id: 'included', count: 2,
+      server_counts_at: new Date(), server_count_revision: '10', status_attempt_revision: '11',
+      include_in_unified_inbox: true, show_app_badge: false, barrier_revision: '20' }] });
+    const response = await fetch(`${base}/api/mail/unread-counts`);
+    expect(await response.json()).toMatchObject({ schemaVersion: 1, kind: 'inbox-unread',
+      userId: 'user-1', showAppBadge: false, barrierRevision: '20', total: 2,
+      snapshots: { included: { revision: '10', attemptRevision: '11' } } });
+  });
+
   it('preserves unknown, empty, and stale counts distinctly, with user-scoped uncached responses', async () => {
     query.mockResolvedValueOnce({ rows: [
       { account_id: 'unknown', count: null },

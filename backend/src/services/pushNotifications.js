@@ -1,5 +1,6 @@
 import webPush from 'web-push';
 import { query } from './db.js';
+import { getUnreadCountSnapshot } from './unreadCountSnapshot.js';
 
 const vapidPublicKey  = process.env.VAPID_PUBLIC_KEY;
 const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
@@ -31,7 +32,11 @@ export async function sendPushToUser(userId, payload) {
   );
   if (result.rows.length === 0) return;
 
-  const body = JSON.stringify(payload);
+  const notification = { ...payload, countUserId: userId };
+  delete notification.unreadCount;
+  delete notification.counts;
+  try { notification.counts = await getUnreadCountSnapshot(userId); } catch { /* Notification delivery must survive unavailable counts. */ }
+  const body = JSON.stringify(notification);
   const staleIds = [];
 
   await Promise.allSettled(result.rows.map(async (row) => {
