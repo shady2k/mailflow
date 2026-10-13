@@ -6,7 +6,7 @@ const { query } = await import('./db.js');
 import { listMessages } from './messageService.js';
 
 beforeEach(() => {
-  query.mockClear();
+  query.mockReset();
 });
 
 describe('listMessages — account scope', () => {
@@ -15,14 +15,14 @@ describe('listMessages — account scope', () => {
 
     const result = await listMessages({ userId: 'user-1' });
 
-    expect(result).toEqual({ messages: [], total: 0 });
+    expect(result).toEqual({ messages: [], total: 0, hasMore: false, nextOffset: 0 });
     expect(query).toHaveBeenCalledOnce();
   });
 
   it('falls back to unified inbox when accountId is not owned by the user', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 'acc-1' }] })           // accounts
-      .mockResolvedValueOnce({ rows: [{ n: 5 }] })                  // folder count
+      .mockResolvedValueOnce({ rows: [{ total: 5 }] })                  // folder count
       .mockResolvedValueOnce({ rows: [{ id: 'msg-1', folder: 'INBOX' }] }); // messages
 
     const result = await listMessages({ userId: 'user-1', accountId: 'acc-other' });
@@ -33,7 +33,7 @@ describe('listMessages — account scope', () => {
 
     // The folder count query should have used total_count (not unread_count)
     const countSql = query.mock.calls[1][0];
-    expect(countSql).toContain('total_count');
+    expect(countSql).toContain('COUNT(*)');
     expect(countSql).not.toContain('unread_count');
   });
 
@@ -45,7 +45,7 @@ describe('listMessages — account scope', () => {
           { id: 'acc-excluded', include_in_unified_inbox: false },
         ],
       })
-      .mockResolvedValueOnce({ rows: [{ n: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ total: 1 }] })
       .mockResolvedValueOnce({ rows: [] });
 
     await listMessages({ userId: 'user-1' });
@@ -59,7 +59,7 @@ describe('listMessages — account scope', () => {
       .mockResolvedValueOnce({
         rows: [{ id: 'acc-excluded', include_in_unified_inbox: false }],
       })
-      .mockResolvedValueOnce({ rows: [{ total_count: 2, unread_count: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ total: 2 }] })
       .mockResolvedValueOnce({ rows: [{ id: 'msg-1' }] });
 
     const result = await listMessages({
@@ -73,10 +73,10 @@ describe('listMessages — account scope', () => {
 });
 
 describe('listMessages — total count selection', () => {
-  it('sums unread_count across accounts for unified inbox when unreadOnly=true', async () => {
+  it('counts matching unread rows across accounts for unified inbox when unreadOnly=true', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 'acc-1' }, { id: 'acc-2' }] }) // accounts
-      .mockResolvedValueOnce({ rows: [{ n: 7 }] })                          // folder count
+      .mockResolvedValueOnce({ rows: [{ total: 7 }] })                          // folder count
       .mockResolvedValueOnce({ rows: [] });                                  // messages
 
     const result = await listMessages({ userId: 'user-1', unreadOnly: 'true' });
@@ -84,14 +84,14 @@ describe('listMessages — total count selection', () => {
     expect(result.total).toBe(7);
 
     const countSql = query.mock.calls[1][0];
-    expect(countSql).toContain('unread_count');
+    expect(countSql).toContain('m.is_read = false');
     expect(countSql).not.toContain('total_count');
   });
 
-  it('sums total_count across accounts for unified inbox when unreadOnly is not set', async () => {
+  it('counts matching visible rows across accounts for unified inbox when unreadOnly is not set', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 'acc-1' }, { id: 'acc-2' }] }) // accounts
-      .mockResolvedValueOnce({ rows: [{ n: 42 }] })                         // folder count
+      .mockResolvedValueOnce({ rows: [{ total: 42 }] })                         // folder count
       .mockResolvedValueOnce({ rows: [] });                                  // messages
 
     const result = await listMessages({ userId: 'user-1' });
@@ -99,14 +99,14 @@ describe('listMessages — total count selection', () => {
     expect(result.total).toBe(42);
 
     const countSql = query.mock.calls[1][0];
-    expect(countSql).toContain('total_count');
+    expect(countSql).toContain('COUNT(*)');
     expect(countSql).not.toContain('unread_count');
   });
 
-  it('reads unread_count from folder row for specific account when unreadOnly=true', async () => {
+  it('counts unread rows for specific account when unreadOnly=true', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 'acc-1' }] })                       // accounts
-      .mockResolvedValueOnce({ rows: [{ total_count: 100, unread_count: 3 }] })  // folder row
+      .mockResolvedValueOnce({ rows: [{ total: 3 }] })  // folder row
       .mockResolvedValueOnce({ rows: [] });                                        // messages
 
     const result = await listMessages({ userId: 'user-1', accountId: 'acc-1', unreadOnly: 'true' });
@@ -115,10 +115,10 @@ describe('listMessages — total count selection', () => {
     expect(result.resolvedAccountId).toBe('acc-1');
   });
 
-  it('reads total_count from folder row for specific account when unreadOnly is not set', async () => {
+  it('counts visible rows for specific account when unreadOnly is not set', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 'acc-1' }] })                       // accounts
-      .mockResolvedValueOnce({ rows: [{ total_count: 100, unread_count: 3 }] })  // folder row
+      .mockResolvedValueOnce({ rows: [{ total: 100 }] })  // folder row
       .mockResolvedValueOnce({ rows: [] });                                        // messages
 
     const result = await listMessages({ userId: 'user-1', accountId: 'acc-1' });
@@ -208,7 +208,7 @@ describe('listMessages — threaded mode', () => {
   it('counts thread messages across all folders for the unified inbox threaded view (#576)', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 'acc-1' }, { id: 'acc-2' }] })
-      .mockResolvedValueOnce({ rows: [{ n: 20 }] })
+      .mockResolvedValueOnce({ rows: [{ total: 20 }] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [{ total: 0 }] });
 
@@ -274,5 +274,29 @@ describe('listMessages — ghost row suppression (#407)', () => {
     // CTE (call 2) and thread-count (call 3) both share `where`, so both exclude ghosts.
     expect(query.mock.calls[2][0]).toContain('NOT (m.message_id IS NULL');
     expect(query.mock.calls[3][0]).toContain('NOT (m.message_id IS NULL');
+  });
+});
+
+describe('list cursor belongs to the filtered rows, not mailbox badge counts', () => {
+  it('does not invent more rows from a larger mailbox count for a short filtered page', async () => {
+    query.mockImplementation(async sql => {
+      if (sql.startsWith('SELECT id, include')) return { rows: [{ id: 'synthetic' }] };
+      if (sql.includes('FROM folders')) return { rows: [{ total_count: 999, unread_count: 999 }] };
+      if (sql.includes('COUNT(*)')) return { rows: [{ total: 2 }] };
+      return { rows: [{ id: 'a' }, { id: 'b' }] };
+    });
+    const result = await listMessages({ userId: 'synthetic-user', accountId: 'synthetic', unreadOnly: true, category: 'updates', limit: 50 });
+    expect(result).toMatchObject({ total: 2, hasMore: false, nextOffset: 2 });
+  });
+  it('uses one bounded lookahead row and returns a cursor without leaking the extra row', async () => {
+    query.mockImplementation(async (sql, values) => {
+      if (sql.startsWith('SELECT id, include')) return { rows: [{ id: 'synthetic' }] };
+      if (sql.includes('FROM folders')) return { rows: [{ total_count: 3 }] };
+      if (sql.includes('COUNT(*)')) return { rows: [{ total: 3 }] };
+      return { rows: [{ id: 'a' }, { id: 'b' }, { id: 'c' }].slice(0, values.at(-2)) };
+    });
+    const result = await listMessages({ userId: 'synthetic-user', accountId: 'synthetic', limit: 2 });
+    expect(result.messages).toHaveLength(2);
+    expect(result).toMatchObject({ hasMore: true, nextOffset: 2 });
   });
 });

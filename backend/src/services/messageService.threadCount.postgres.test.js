@@ -3,7 +3,7 @@ import pg from 'pg';
 
 vi.mock('./db.js', () => ({ query: vi.fn() }));
 vi.mock('../middleware/auth.js', () => ({ requireAuth: (req, _res, next) => { req.session = { userId: 'owner' }; next(); } }));
-vi.mock('../index.js', () => ({ imapManager: {} }));
+vi.mock('../index.js', () => ({ imapManager: { prefetchFolderBodies: vi.fn(async () => {}) } }));
 import express from 'express';
 import { query } from './db.js';
 import { listMessages } from './messageService.js';
@@ -168,5 +168,39 @@ describe.skipIf(!process.env.MAILFLOW_TEST_DATABASE_URL)('threaded Inbox message
     await database.query("UPDATE messages SET is_deleted = true WHERE message_id = '<b@me>'");
 
     expect((await inboxRows(account))['<a@ext>'].message_count).toBe(1);
+  });
+
+  it.each([[false, 3, true], [true, 2, false]])('HTTP paging counts matching rows/groups independently of mailbox badge (threaded=%s)', async (threaded, total, more) => {
+    await folder('INBOX');
+    await database.query('UPDATE folders SET total_count=999, unread_count=999');
+    await insert('INBOX', '<a1@synthetic.invalid>', 'root-a', '2026-10-13T10:00Z', 'Synthetic A');
+    await insert('INBOX', '<a2@synthetic.invalid>', 'root-a', '2026-10-13T11:00Z', 'Synthetic A reply');
+    await insert('INBOX', '<b@synthetic.invalid>', 'root-b', '2026-10-13T12:00Z', 'Synthetic B');
+    await insert('INBOX', '<read@synthetic.invalid>', 'root-read', '2026-10-13T13:00Z', 'Synthetic read');
+    await insert('INBOX', '<other@synthetic.invalid>', 'root-other', '2026-10-13T14:00Z', 'Synthetic other category');
+    await database.query("UPDATE messages SET category='automated'");
+    await database.query("UPDATE messages SET is_read=true WHERE thread_key='root-read'");
+    await database.query("UPDATE messages SET category='primary' WHERE thread_key='root-other'");
+    const url = `${base}/api/mail/messages?accountId=${account}&threaded=${threaded}&unreadOnly=true&category=automated&limit=2`;
+    const response = await fetch(url); expect(response.status).toBe(200);
+    const page = await response.json();
+    expect(page).toMatchObject({ total, hasMore: more, nextOffset: 2 });
+    expect(page.messages).toHaveLength(2);
+    const next = await (await fetch(url + '&offset=2')).json();
+    expect(next.messages).toHaveLength(threaded ? 0 : 1);
+    expect(next.hasMore).toBe(false);
+    expect(next.nextOffset).toBe(total);
+  });
+
+  it('HTTP lookahead remains bounded even when a client requests the whole mailbox', async () => {
+    await database.query(`INSERT INTO messages(id,account_id,folder,uid,message_id,thread_key,date,subject)
+      SELECT gen_random_uuid(), $1, 'INBOX', n, '<bulk-' || n || '@synthetic.invalid>', 'root-' || n, now(), 'Synthetic bulk'
+      FROM generate_series(1,520) n`, [account]);
+    const first = await (await fetch(`${base}/api/mail/messages?accountId=${account}&limit=100000`)).json();
+    expect(first.messages).toHaveLength(500);
+    expect(first).toMatchObject({ total: 520, hasMore: true, nextOffset: 500 });
+    const last = await (await fetch(`${base}/api/mail/messages?accountId=${account}&limit=100000&offset=500`)).json();
+    expect(last.messages).toHaveLength(20);
+    expect(last).toMatchObject({ hasMore: false, nextOffset: 520 });
   });
 });

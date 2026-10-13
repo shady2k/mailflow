@@ -160,7 +160,7 @@ router.get('/messages', async (req, res) => {
   const VALID_CATEGORIES = new Set(['primary', 'newsletter', 'promotion', 'automated', 'social']);
   const safeCategory = VALID_CATEGORIES.has(category) ? category : undefined;
 
-  const { messages, total, threaded: isThreaded, resolvedAccountId } = await listMessages({
+  const { messages, total, threaded: isThreaded, resolvedAccountId, hasMore, nextOffset } = await listMessages({
     userId: req.session.userId,
     accountId,
     folder,
@@ -185,7 +185,7 @@ router.get('/messages', async (req, res) => {
     if (ghosts > 0) recordSyncSignal('ghost_rows_served', { accountId: resolvedAccountId, magnitude: ghosts });
   }
 
-  res.json({ messages, total, ...(isThreaded ? { threaded: true } : {}) });
+  res.json({ messages, total, hasMore, nextOffset, ...(isThreaded ? { threaded: true } : {}) });
 });
 
 router.get('/messages/:id', async (req, res) => {

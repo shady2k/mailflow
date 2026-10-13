@@ -11,7 +11,7 @@ export async function listMessages({ userId, accountId, folder = 'INBOX', limit 
     accountIds: scopedAccountIds,
     resolvedAccountId,
   } = resolveAccountScope(accountsResult.rows, accountId);
-  if (!scopedAccountIds.length) return { messages: [], total: 0 };
+  if (!scopedAccountIds.length) return { messages: [], total: 0, hasMore: false, nextOffset: 0 };
 
   let whereConditions = ['m.is_deleted = false'];
   const values = [];
@@ -55,31 +55,8 @@ export async function listMessages({ userId, accountId, folder = 'INBOX', limit 
   const safeLimit  = Math.min(Math.max(parseInt(limit)  || 50, 1), 500);
   const safeOffset = Math.max(parseInt(offset) || 0, 0);
 
-  let total = 0;
-  try {
-    if (isSpecificAccount) {
-      const r = await query(
-        'SELECT total_count, unread_count FROM folders WHERE account_id = $1 AND path = $2',
-        [accountId, folder]
-      );
-      if (r.rows.length) {
-        total = isUnreadOnly ? (r.rows[0].unread_count ?? 0) : (r.rows[0].total_count ?? 0);
-      }
-    } else {
-      const r = isUnreadOnly
-        ? await query(
-            "SELECT COALESCE(SUM(unread_count), 0)::int AS n FROM folders WHERE account_id = ANY($1) AND path = 'INBOX'",
-            [scopedAccountIds]
-          )
-        : await query(
-            "SELECT COALESCE(SUM(total_count), 0)::int AS n FROM folders WHERE account_id = ANY($1) AND path = 'INBOX'",
-            [scopedAccountIds]
-          );
-      total = r.rows[0]?.n ?? 0;
-    }
-  } catch {
-    total = 0;
-  }
+  const countResult = await query(`SELECT COUNT(*)::int AS total FROM messages m WHERE ${where}`, [...values]);
+  const total = countResult.rows[0]?.total ?? 0;
 
   if (threaded === 'true' || threaded === true) {
     const filterValues = [...values];
@@ -173,7 +150,7 @@ export async function listMessages({ userId, accountId, folder = 'INBOX', limit 
       FROM ranked
       WHERE rn = 1
       ORDER BY date DESC, id
-    `, [...filterValues, threadAccountParam, safeLimit, safeOffset]);
+    `, [...filterValues, threadAccountParam, safeLimit + 1, safeOffset]);
 
     const threadCountResult = await query(`
       SELECT COUNT(DISTINCT m.thread_key)::int AS total
@@ -182,7 +159,9 @@ export async function listMessages({ userId, accountId, folder = 'INBOX', limit 
     `, filterValues);
 
     return {
-      messages: threadResult.rows,
+      messages: threadResult.rows.slice(0, safeLimit),
+      hasMore: threadResult.rows.length > safeLimit,
+      nextOffset: safeOffset + Math.min(threadResult.rows.length, safeLimit),
       total: threadCountResult.rows[0]?.total ?? 0,
       threaded: true,
       resolvedAccountId,
@@ -191,7 +170,7 @@ export async function listMessages({ userId, accountId, folder = 'INBOX', limit 
 
   const limitParam  = p;
   const offsetParam = p + 1;
-  values.push(safeLimit, safeOffset);
+  values.push(safeLimit + 1, safeOffset);
 
   const result = await query(`
     SELECT m.id, m.uid, m.folder, m.message_id, m.subject, m.from_name, m.from_email,
@@ -216,7 +195,9 @@ export async function listMessages({ userId, accountId, folder = 'INBOX', limit 
   `, values);
 
   return {
-    messages: result.rows,
+    messages: result.rows.slice(0, safeLimit),
+    hasMore: result.rows.length > safeLimit,
+    nextOffset: safeOffset + Math.min(result.rows.length, safeLimit),
     total,
     resolvedAccountId,
   };
