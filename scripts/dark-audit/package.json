@@ -7,6 +7,6 @@
     "selftest": "node selftest.mjs"
   },
   "devDependencies": {
-    "playwright": "1.55.0"
+    "playwright": "1.55.1"
   }
 }
