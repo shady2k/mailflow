@@ -3,6 +3,29 @@ import assert from 'node:assert/strict';
 import { mergeCountSnapshots, adjustCountPending, expireCountPending, settleCountPending, displayCountSnapshot, mergeFolderSnapshots, PENDING_COUNT_MS, PENDING_SETTLE_MS } from './countSnapshots.js';
 const accounts = [{ id: 'a', enabled: true }, { id: 'b', enabled: true }, { id: 'x', enabled: true, include_in_unified_inbox: false }];
 const sample = (a, b, revision = '1') => ({ byAccount: { a, b, x: 7 }, snapshots: Object.fromEntries(['a', 'b', 'x'].map(id => [id, { revision, known: true, stale: false, observedAt: new Date(0).toISOString() }])) });
+test('a failed STATUS attempt cannot acknowledge an optimistic archive', () => {
+  const initial = sample(2, 0);
+  const pending = adjustCountPending({}, initial, 'a', -1, 0);
+  const failed = sample(2, 0);
+  failed.snapshots.a = { ...failed.snapshots.a, attemptRevision: '2', stale: true };
+  assert.deepEqual(settleCountPending(pending, failed, 7000), pending);
+});
+test('post-write database barrier rejects observations started before the write finished', () => {
+  const initial = sample(2, 0, '5');
+  let pending = adjustCountPending({}, initial, 'a', -1, 0);
+  const first = { ...sample(2, 0, '7'), barrierRevision: '9' };
+  pending = settleCountPending(pending, first, 7000, false, 1);
+  assert.equal(pending.a.ackBarrier, null, 'an in-flight write cannot capture acknowledgement');
+  pending = settleCountPending(pending, first, 8000, true, 2);
+  assert.equal(pending.a.ackBarrier, '9');
+  pending = settleCountPending(pending, { ...sample(2, 0, '8'), barrierRevision: '10' }, 9000, true, 2);
+  assert.ok(pending.a, 'late pre-barrier STATUS success cannot settle');
+  const failed = { ...sample(2, 0, '8'), barrierRevision: '12' };
+  failed.snapshots.a.attemptRevision = '12'; failed.snapshots.a.stale = true;
+  pending = settleCountPending(pending, failed, 10000, true, 2);
+  assert.ok(pending.a, 'new failed attempt cannot settle');
+  assert.deepEqual(settleCountPending(pending, { ...sample(1, 0, '13'), barrierRevision: '13' }, 11000, true, 2), {});
+});
 test('reflected reads never get subtracted from a newer server snapshot a second time', () => {
   const initial = sample(10, 20);
   let pending = adjustCountPending({}, initial, 'a', -1, 0);
@@ -23,7 +46,7 @@ test('continuous clicks cannot extend the deadline, and expiry adopts the latest
   pending = adjustCountPending(pending, initial, 'a', -1, 4999);
   assert.equal(pending.a.expiresAt, PENDING_COUNT_MS);
   assert.equal(displayCountSnapshot(sample(8, 20, '3'), pending, accounts, PENDING_COUNT_MS).byAccount.a, 8);
-  assert.deepEqual(expireCountPending(pending, PENDING_COUNT_MS), {});
+  assert.equal(expireCountPending(pending, PENDING_COUNT_MS).a.stale, true);
 });
 test('rollback cancels the deduction; a delayed rollback is bounded by its own fixed window', () => {
   const initial = sample(10, 20);
@@ -31,7 +54,7 @@ test('rollback cancels the deduction; a delayed rollback is bounded by its own f
   pending = adjustCountPending(pending, initial, 'a', 1, 50);
   assert.equal(displayCountSnapshot(initial, pending, accounts, 51).byAccount.a, 10);
   pending = adjustCountPending({}, initial, 'a', 1, 6000);
-  assert.equal(displayCountSnapshot(initial, pending, accounts, 6000 + PENDING_COUNT_MS).byAccount.a, 10);
+  assert.equal(displayCountSnapshot(initial, pending, accounts, 6000 + PENDING_COUNT_MS).byAccount.a, 11);
 });
 test('ordering uses per-account integer revisions without losing 64-bit precision', () => {
   const newer = sample(9, 17, '9007199254740993');
@@ -113,11 +136,11 @@ test('windows settle independently, and each keeps its own floor', () => {
   assert.equal(displayCountSnapshot(newer, settled, accounts, 7000).byAccount.b, 18);
 });
 
-test('the backstop still applies when the observation never arrives', () => {
+test('a missing observation retains the projection and marks it stale', () => {
   const initial = sample(10, 20);
   const pending = adjustCountPending({}, initial, 'a', -1, 0);
-  assert.deepEqual(settleCountPending(pending, initial, PENDING_COUNT_MS), {},
-    'a window whose replacement never came must not survive its deadline');
+  assert.equal(settleCountPending(pending, initial, PENDING_COUNT_MS).a.stale, true);
+  assert.equal(displayCountSnapshot(initial, pending, accounts, PENDING_COUNT_MS).byAccount.a, 9);
 });
 
 test('a window missing its watermark falls back to the backstop rather than settling early', () => {
@@ -127,11 +150,18 @@ test('a window missing its watermark falls back to the backstop rather than sett
   const legacy = { a: { base: 10, delta: -1, expiresAt: PENDING_COUNT_MS } };
   const newer = mergeCountSnapshots(initial, sample(9, 20, '2'));
   assert.deepEqual(settleCountPending(legacy, newer, PENDING_SETTLE_MS + 1000), legacy);
-  assert.deepEqual(settleCountPending(legacy, newer, PENDING_COUNT_MS), {});
+  assert.equal(settleCountPending(legacy, newer, PENDING_COUNT_MS).a.stale, true);
 });
 import { unreadDeltaByAccount } from './countSnapshots.js';
 
 describe('unreadDeltaByAccount (#476 badge attribution)', () => {
+  it('does not charge Archive or Trash reads to the INBOX unread badge', () => {
+    assert.deepEqual([...unreadDeltaByAccount([
+      { account_id: 'a', folder: 'Archive', is_read: false },
+      { account_id: 'a', folder: 'Trash', is_read: false },
+      { account_id: 'a', folder: 'INBOX', is_read: false },
+    ], true, 'a')], [['a', 1]]);
+  });
   it('splits a cross-account conversation unread delta per account', () => {
     const msgs = [
       { id: 'w', account_id: 'work', is_read: false },

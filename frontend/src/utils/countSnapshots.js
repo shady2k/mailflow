@@ -1,16 +1,9 @@
 import { isAccountInUnifiedInbox } from './unifiedInbox.js';
 
-// Absolute backstop on an optimistic window. Reaching it means the observation our mutation
-// was supposed to trigger never arrived, so adopting the server value is the honest outcome.
-// It must exceed the observation path or every mutation visibly bounces: the backend debounces
-// its mutation-triggered STATUS by 5s and then needs a connect, login and STATUS on top,
-// measured at 1-2s, so a 5s window expired ~1-2s BEFORE its own replacement value landed.
+// Reconciliation deadline: retain the optimistic projection if no successful observation
+// acknowledges it, mark it stale, and request another snapshot instead of restoring old mail.
 export const PENDING_COUNT_MS = 15000;
-
-// A window cannot settle before this. The backend's 5s debounce exists so the IMAP flag write
-// lands before it asks the server, so an observation arriving sooner may predate our write and
-// must not be treated as reflecting it. Past this floor, the next observation settles the
-// window immediately, which is what keeps the common case at ~6-7s rather than the backstop.
+// Compatibility floor for snapshots from an older backend without a database barrier.
 export const PENDING_SETTLE_MS = 6000;
 
 // Freshness allowance for the per-account totals, which come from INBOX. INBOX is polled every
@@ -18,6 +11,7 @@ export const PENDING_SETTLE_MS = 6000;
 // rotating folders get a longer, rotation-derived allowance computed server-side.
 export const ACCOUNT_COUNT_STALE_MS = 180000;
 const revision = snapshot => BigInt(snapshot?.attemptRevision || snapshot?.revision || '0');
+const observedRevision = snapshot => BigInt(snapshot?.revision || '0');
 
 // A snapshot is independently ordered per account. Comparing unified totals cannot
 // acknowledge individual reads: arrivals and writes in another account can cancel them.
@@ -33,34 +27,39 @@ export function mergeCountSnapshots(previous, incoming) {
 }
 
 export function expireCountPending(pending, now = Date.now()) {
-  return Object.fromEntries(Object.entries(pending).filter(([, p]) => p.expiresAt > now));
+  return Object.fromEntries(Object.entries(pending).filter(([, p]) => p.delta !== 0)
+    .map(([id, p]) => [id, p.expiresAt > now ? p : { ...p, stale: true, expiresAt: now + PENDING_COUNT_MS }]));
 }
 
 export function adjustCountPending(pending, displayed, accountId, delta, now = Date.now()) {
   const next = expireCountPending(pending, now);
   const base = displayed.byAccount[accountId];
   if (!Number.isFinite(base) || !Number.isFinite(delta)) return next;
-  // The baseline, deadline and observation watermark never move while this window is open, so
-  // continuous activity cannot freeze the count. sinceRevision records which observation was on
-  // screen when the window opened, so settleCountPending can recognise a strictly later one.
+  // Keep the raw baseline separate from the projection, including when scope changes.
   const p = next[accountId] || { base, delta: 0, openedAt: now, expiresAt: now + PENDING_COUNT_MS,
-    sinceRevision: String(revision(displayed.snapshots?.[accountId])) };
-  next[accountId] = { ...p, delta: p.delta + delta };
+    sinceRevision: String(observedRevision(displayed.snapshots?.[accountId])) };
+  next[accountId] = { ...p, delta: p.delta + delta, ackBarrier: null };
+  if (next[accountId].delta === 0) delete next[accountId];
   return next;
 }
 
-// Retire windows whose mutation the server has now had a chance to observe.
-//
-// This reads the observation's own revision, never the count it carries: inferring
-// acknowledgement from a total is invalid, because simultaneous arrivals, reads in another
-// client and other-account changes can all cancel out. A strictly later observation taken after
-// the settle floor is evidence about TIMING only, which is what the backend's debounce is for.
-export function settleCountPending(pending, server, now = Date.now()) {
+// A post-write database barrier is a watermark for STATUS requests started before the write
+// completed. Only a successful observation above it can acknowledge a projection; attempt
+// revisions include failed observations and must never do that.
+export function settleCountPending(pending, server, now = Date.now(), canAcknowledge = true, writeVersion = 0) {
   const out = {};
   for (const [id, p] of Object.entries(expireCountPending(pending, now))) {
     const pastFloor = Number.isFinite(p.openedAt) && now - p.openedAt >= PENDING_SETTLE_MS;
-    const observed = revision(server?.snapshots?.[id]) > BigInt(p.sinceRevision || '0');
-    if (!(pastFloor && observed)) out[id] = p;
+    const snapshot = server?.snapshots?.[id];
+    const observed = snapshot?.known !== false && !snapshot?.stale
+      && observedRevision(snapshot) > BigInt(p.sinceRevision || '0');
+    if (server.barrierRevision != null) {
+      const currentBarrier = p.ackWriteVersion === writeVersion ? p.ackBarrier : null;
+      const barrier = currentBarrier ?? (canAcknowledge ? String(server.barrierRevision) : null);
+      if (!canAcknowledge || barrier == null || !observed || observedRevision(snapshot) <= BigInt(barrier)) {
+        out[id] = { ...p, ackBarrier: barrier, ackWriteVersion: writeVersion };
+      }
+    } else if (!(canAcknowledge && pastFloor && observed)) out[id] = p;
   }
   return out;
 }
@@ -72,7 +71,8 @@ export function displayCountSnapshot(server, pending, accounts, now = Date.now()
     if (s) snapshots[id] = { ...s, stale: s.stale || !s.observedAt || now - new Date(s.observedAt).getTime() > ACCOUNT_COUNT_STALE_MS };
   }
   for (const [id, p] of Object.entries(pending)) {
-    if (p.expiresAt > now && Object.hasOwn(byAccount, id)) byAccount[id] = Math.max(0, p.base + p.delta);
+    if (Object.hasOwn(byAccount, id)) byAccount[id] = Math.max(0, p.base + p.delta);
+    if (snapshots[id] && (p.stale || p.expiresAt <= now)) snapshots[id] = { ...snapshots[id], stale: true };
   }
   const included = accounts.filter(isAccountInUnifiedInbox);
   const total = included.reduce((sum, a) => sum + (byAccount[a.id] || 0), 0);
@@ -106,6 +106,7 @@ export function unreadDeltaByAccount(messages, read, fallbackAccountId) {
   const out = new Map();
   for (const m of messages || []) {
     if (!m) continue;
+    if (m.folder && m.folder !== 'INBOX') continue;
     const changes = read ? !m.is_read : !!m.is_read;
     if (!changes) continue;
     const account = m.account_id ?? fallbackAccountId;

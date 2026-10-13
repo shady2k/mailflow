@@ -30,7 +30,6 @@ self.addEventListener('push', (event) => {
     icon        = '/icon-512.png',
     badge       = '/badge-96.png',
     url         = '/',
-    unreadCount,          // intentionally no default — undefined means "don't touch badge"
   } = data;
 
   event.waitUntil(
@@ -39,19 +38,11 @@ self.addEventListener('push', (event) => {
       .then((clients) => {
         const promises = [];
 
-        // Update the home screen badge (iOS 17.4+, Android Chrome PWA).
-        // Only runs when unreadCount is explicitly provided — a missing value
-        // means the backend couldn't determine the count and should not clear it.
-        // Uses self.navigator — bare `navigator` is not reliably exposed in iOS
-        // Safari service worker scope.
-        try {
-          if (self.navigator && 'setAppBadge' in self.navigator && unreadCount != null) {
-            const p = unreadCount > 0
-              ? self.navigator.setAppBadge(unreadCount)
-              : self.navigator.clearAppBadge();
-            if (p && typeof p.then === 'function') promises.push(p.catch(() => {}));
-          }
-        } catch (_) {}
+        for (const client of clients) client.postMessage({ type: 'mailflow:counts_refresh' });
+        // A push can predate a live client's archive/Undo. Its count must never overwrite
+        // the store's projection. Without a client, read the same authenticated snapshot
+        // as the UI rather than the cached-row tally or delivery order of push payloads.
+        if (!clients.length) promises.push(refreshAppBadge());
 
         // iOS/WebKit requires showNotification() to be called for every push event.
         // Skipping it — even when a client is focused — causes WebKit to log a
@@ -74,6 +65,49 @@ self.addEventListener('push', (event) => {
       })
   );
 });
+
+let badgeRefreshGeneration = 0;
+let badgeWrite = Promise.resolve();
+self.addEventListener('message', event => {
+  if (event.data?.type !== 'mailflow:badge') return;
+  ++badgeRefreshGeneration;
+  // All controlled tabs/PWA instances share this writer. Preserve submission order even
+  // when the OS API is asynchronous, and keep a failed call from poisoning the queue.
+  event.waitUntil(queueBadge(event.data.total, event.data.enabled));
+});
+
+function queueBadge(total, enabled = true) {
+  if (!Number.isFinite(total) || total < 0) return Promise.resolve();
+  badgeWrite = badgeWrite.catch(() => {}).then(async () => {
+    if (!self.navigator || !('setAppBadge' in self.navigator)) return;
+    if (enabled && total > 0) await self.navigator.setAppBadge(total);
+    else await self.navigator.clearAppBadge();
+  }).catch(() => {});
+  return badgeWrite;
+}
+
+async function refreshAppBadge() {
+  const generation = ++badgeRefreshGeneration;
+  try {
+    if (!self.navigator || !('setAppBadge' in self.navigator)) return;
+    const options = { credentials: 'same-origin', cache: 'no-store', headers: { 'X-Requested-With': 'MailFlow' } };
+    const [response, preferencesResponse] = await Promise.all([
+      fetch('/api/mail/unread-counts', options), fetch('/api/auth/preferences', options),
+    ]);
+    if (!response.ok || !preferencesResponse.ok) return;
+    const [counts, preferences] = await Promise.all([response.json(), preferencesResponse.json()]);
+    if (generation !== badgeRefreshGeneration) return;
+    // A client may have opened while the HTTP request was in flight.
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (clients.length) {
+      for (const client of clients) client.postMessage({ type: 'mailflow:counts_refresh' });
+      return;
+    }
+    if (preferences.showAppBadge === false) { await queueBadge(0, false); return; }
+    if (!counts.complete || !Number.isFinite(counts.total)) return;
+    await queueBadge(counts.total);
+  } catch (_) {}
+}
 
 // Persist a deep-link target in IndexedDB so the page can consume it on focus or
 // launch. This is the reliable channel on iOS: postMessage can be missed on a

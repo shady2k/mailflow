@@ -19,7 +19,7 @@ beforeEach(() => {
   useStore.getState().setUnreadCounts(snapshot(10,20));
 });
 afterEach(() => { useStore.getState().setLocked(true); mock.timers.reset(); });
-test('actual store retires each account window on its own backstop when no observation arrives', () => {
+test('actual store requests reconciliation without reverting optimistic archives offline', () => {
   let refreshes = 0;
   const refresh = () => refreshes++;
   window.addEventListener('mailflow:counts_refresh', refresh);
@@ -29,11 +29,12 @@ test('actual store retires each account window on its own backstop when no obser
   store.decrementUnread('b', 2);
   assert.equal(useStore.getState().unreadCounts.total,27);
   mock.timers.tick(PENDING_COUNT_MS - 4000);
-  assert.equal(useStore.getState().pendingCounts.a,undefined);
+  assert.equal(useStore.getState().pendingCounts.a.stale,true);
   assert.ok(useStore.getState().pendingCounts.b,'a later mutation keeps its own full window');
   mock.timers.tick(4000);
-  assert.deepEqual(useStore.getState().pendingCounts,{});
-  assert.equal(useStore.getState().unreadCounts.total,30,'adopts the server value it never heard back about');
+  assert.equal(useStore.getState().pendingCounts.b.stale,true);
+  assert.equal(useStore.getState().unreadCounts.total,27,'keeps the projection until an actual observation acknowledges it');
+  assert.equal(useStore.getState().unreadCounts.complete,false);
   assert.equal(refreshes,2);
   window.removeEventListener('mailflow:counts_refresh',refresh);
 });
@@ -68,11 +69,18 @@ test('locking cancels pending work and rejects delayed snapshots', () => {
   assert.deepEqual(useStore.getState().unreadCounts.byAccount,{});
   assert.deepEqual(useStore.getState().pendingCounts,{});
 });
+test('versioned snapshots from the previous user are rejected after logout or account switch', () => {
+  useStore.getState().setUnreadCounts({ ...snapshot(90, 0, '20'), userId: 'other-user' });
+  assert.equal(useStore.getState().unreadCounts.total, 30);
+  useStore.getState().setUser(null);
+  useStore.getState().setUnreadCounts({ ...snapshot(90, 0, '20'), userId: 'u' });
+  assert.equal(useStore.getState().unreadCounts.total, 0);
+});
 test('changing unified scope does not turn the displayed optimistic count into a new baseline', () => {
   useStore.getState().decrementUnread('a');
   useStore.getState().updateAccount('b',{ include_in_unified_inbox: false });
   assert.equal(useStore.getState().unreadCounts.total,9);
   assert.equal(useStore.getState().serverUnreadCounts.byAccount.a,10);
   mock.timers.tick(PENDING_COUNT_MS);
-  assert.equal(useStore.getState().unreadCounts.total,10);
+  assert.equal(useStore.getState().unreadCounts.total,9);
 });

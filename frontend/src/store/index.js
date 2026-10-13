@@ -1,5 +1,6 @@
 import { pendingDeleteMap, observeDeleteSettlements } from '../utils/pendingDeletes.js';
 import { stageCategoryRemovals, settleCategoryRemoval } from '../utils/categoryMutations.js';
+import { countWriteState } from '../utils/countWrites.js';
 import { isAccountInUnifiedInbox } from '../utils/unifiedInbox.js';
 import { create } from 'zustand';
 import { resolveConversationMode, groupsMessageList, conversationModeTransition, isConversationMode } from '../utils/conversationMode.js';
@@ -91,6 +92,8 @@ function readGtdCollapsedSections() {
 }
 
 let pendingCountTimer;
+let countMutationSequence = 0;
+const countMutationSource = Math.random().toString(36).slice(2);
 function expirePendingCounts() {
   clearTimeout(pendingCountTimer);
   const deadlines = Object.values(useStore.getState().pendingCounts).map(p => p.expiresAt);
@@ -380,18 +383,24 @@ export const useStore = create((set, get) => ({
   serverUnreadCounts: { total: 0, byAccount: {}, snapshots: {} },
   pendingCounts: {},
   unreadCounts: { total: 0, byAccount: {}, snapshots: {}, complete: false },
-  setUnreadCounts: (counts) => set(state => {
-    if (state.isLocked) return {};
-    const server = mergeCountSnapshots(state.serverUnreadCounts, counts);
-    // Retire windows the server has now had a chance to observe, rather than waiting for the
-    // backstop to expire them: the timer alone reverted the badge ~1-2s before the replacement
-    // observation landed, which read as the count bouncing back on every read or move.
-    const pending = settleCountPending(state.pendingCounts, server);
-    if (!Object.keys(pending).length) { clearTimeout(pendingCountTimer); pendingCountTimer = null; }
-    return { serverUnreadCounts: server, pendingCounts: pending,
-      unreadCounts: displayCountSnapshot(server, pending, state.accounts) };
-  }),
-  adjustUnread: (accountId, delta) => {
+  setUnreadCounts: (counts, broadcast = true) => {
+    set(state => {
+      if (state.isLocked || (counts.userId && counts.userId !== state.user?.id)) return {};
+      const server = mergeCountSnapshots(state.serverUnreadCounts, counts);
+      // A snapshot requested across a write cannot establish its post-write barrier.
+      const writes = countWriteState();
+      const canAcknowledge = writes.pending === 0 && pendingDeleteMap.size === 0
+        && (counts.barrierRevision == null || (counts.countWriteVersion === writes.version && counts.countWritesPending === 0));
+      const pending = settleCountPending(state.pendingCounts, server, Date.now(), canAcknowledge, writes.version);
+      if (!Object.keys(pending).length) { clearTimeout(pendingCountTimer); pendingCountTimer = null; }
+      return { serverUnreadCounts: server, pendingCounts: pending,
+        unreadCounts: displayCountSnapshot(server, pending, state.accounts) };
+    });
+    if (broadcast && !get().isLocked && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('mailflow:count_snapshot', { detail: counts }));
+    }
+  },
+  adjustUnread: (accountId, delta, broadcast = true) => {
     set(state => {
       if (state.isLocked) return {};
       const displayed = displayCountSnapshot(state.serverUnreadCounts, state.pendingCounts, state.accounts);
@@ -401,6 +410,11 @@ export const useStore = create((set, get) => ({
     });
     // Do not reset this timer on subsequent clicks: continuous activity cannot freeze counts.
     if (!pendingCountTimer) expirePendingCounts();
+    if (broadcast && !get().isLocked && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('mailflow:count_mutation', {
+        detail: { accountId, delta, mutationId: `${countMutationSource}:${++countMutationSequence}` },
+      }));
+    }
   },
   decrementUnread: (accountId, count = 1) => get().adjustUnread(accountId, -count),
   incrementUnread: (accountId, count = 1) => get().adjustUnread(accountId, count),

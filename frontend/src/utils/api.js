@@ -1,4 +1,5 @@
 import { beginCategoryRequest } from './categoryMutations.js';
+import { beginCountWrite, countWriteState } from './countWrites.js';
 const BASE = '/api';
 
 // Sent on every /api request so the backend CSRF guard accepts it. A cross-site
@@ -21,6 +22,8 @@ async function request(method, path, body, extraHeaders) {
   }
   const affectsCounts = method !== 'GET' && (path.startsWith('/mail/') || path.startsWith('/rules/') || path.startsWith('/categories/'));
   const finish = affectsCounts ? beginCategoryRequest() : () => {};
+  const finishCountWrite = affectsCounts ? beginCountWrite() : () => {};
+  const countReadState = path === '/mail/unread-counts' ? countWriteState() : null;
   try {
     const res = await fetch(BASE + path, opts);
     if (!res.ok) {
@@ -36,9 +39,14 @@ async function request(method, path, body, extraHeaders) {
       throw Object.assign(new Error(err.error || 'Request failed'), { status: res.status });
     }
     const data = await res.json();
+    if (countReadState && data && typeof data === 'object') {
+      data.countWriteVersion = countReadState.version;
+      data.countWritesPending = countReadState.pending;
+    }
     return data;
   } finally {
     finish();
+    finishCountWrite();
     if (affectsCounts && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('mailflow:category-counts-refresh'));
   }
 }

@@ -10,6 +10,7 @@ import { useInboxNavigation } from '../hooks/useInboxNavigation.js';
 import { LAYOUTS, isSinglePaneLayout } from '../layouts.js';
 import { updateFaviconBadge } from '../themes.js';
 import { installResumeRefresh } from '../utils/resumeRefresh.js';
+import { startCountSync } from '../utils/countSync.js';
 import { shortcutBus } from '../utils/shortcutBus.js';
 import { dispatchHoveredGtdShortcut } from '../utils/gtdHoveredRow.js';
 import { runMailboxShortcut, canRunMailboxShortcut, browserShortcutFallback } from '../utils/visibleMailboxes.js';
@@ -66,6 +67,7 @@ const lazyFallback = (
 );
 
 export default function MailApp() {
+  useEffect(() => startCountSync(useStore), []);
   const { t } = useTranslation();
   const {
     setAccounts, setUnreadCounts, showAdmin,
@@ -370,6 +372,9 @@ export default function MailApp() {
     if ('serviceWorker' in navigator) {
       onSwMessage = (event) => {
         if (event.data && event.data.type === 'mailflow_deeplink') consumePendingDeepLink();
+        if (event.data?.type === 'mailflow:counts_refresh') {
+          window.dispatchEvent(new CustomEvent('mailflow:counts_refresh'));
+        }
       };
       navigator.serviceWorker.addEventListener('message', onSwMessage);
     }
@@ -496,7 +501,11 @@ export default function MailApp() {
     updateFaviconBadge(showFaviconBadge ? tabCount : 0);
     // App-icon badge always reflects total unread across all accounts so that
     // selecting a zero-unread account never clears the home screen badge.
-    if ('setAppBadge' in navigator) {
+    if (navigator.serviceWorker?.controller) {
+      if (unreadCounts.complete || Object.keys(useStore.getState().pendingCounts).length || !showAppBadge) {
+        navigator.serviceWorker.controller.postMessage({ type: 'mailflow:badge', total, enabled: showAppBadge });
+      }
+    } else if ('setAppBadge' in navigator && (unreadCounts.complete || Object.keys(useStore.getState().pendingCounts).length || !showAppBadge)) {
       if (showAppBadge && total > 0) navigator.setAppBadge(total).catch(() => {});
       else navigator.clearAppBadge().catch(() => {});
     }
