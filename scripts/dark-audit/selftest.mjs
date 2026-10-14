@@ -63,6 +63,12 @@ export const FIXTURES = {
   // must not show it, and recolors instead.
   brokenSenderDark: '<style>@media (prefers-color-scheme: dark) { .card { background: #111111 !important; } }</style>'
     + `<div class="card" style="background:#ffffff;${CARD}"><p style="color:#222222 !important">This line keeps its dark inline color in the sender design.</p></div>`,
+  // A sender dark design that darkens its card and leaves the gray frame around it as sent
+  // (Travelers): readable, but half the email stays light, so MailFlow recolors instead.
+  halfDarkSender: '<style>@media (prefers-color-scheme: dark) { .card { background: #272a2d !important; color: #ffffff !important; } }</style>'
+    + '<table width="100%" bgcolor="#dadadb" cellpadding="0" cellspacing="0"><tr><td style="padding:60px 140px">'
+    + `<div class="card" style="background:#ffffff;color:#222222;${CARD}">A card the sender darkens inside a gray frame it leaves light.</div>`
+    + '</td></tr></table>',
   // Colored text and a pale colored callout keep their hues.
   colors: '<p style="color:#d32f2f">Red warning text that should stay red.</p>'
     + '<p style="color:#1565c0">Blue informational text that should stay blue.</p>'
@@ -101,6 +107,10 @@ export const FIXTURES = {
   // srcdoc frame), and the page can read its pixels, so a dark one on a transparent background gets
   // its backing like an inline image.
   proxiedLogo: { proxied: true, html: `<p>Logo:</p><img width="160" height="50" src="${PROXY_URL}">` },
+  // A cell with a small background image that does not cover its text, and no background color of
+  // its own: left as sent, it must keep the white it was drawn on, or the recolored table shows
+  // through behind its dark text (unreadable, and the readability check skips text over an image).
+  islandText: `<table width="100%" bgcolor="#ffffff"><tr><td style="background-image:url('${svg('<rect width="20" height="20" fill="#cc0000"/>')}');background-repeat:no-repeat;color:#333333;${CARD}">Text beside a small background image</td></tr></table>`,
   // A sender that asks to stay light.
   lightOnly: '<html><head><meta name="color-scheme" content="only light"></head><body><p style="color:#333">Keep me light please.</p><img src="https://example.invalid/pixel.gif" width="1" height="1"></body></html>',
 };
@@ -163,6 +173,11 @@ export async function runSelftest() {
     assert.equal(auto('senderDark').outcome, 'sender', "the sender's design is preferred");
     assert.ok(auto('senderDark').bright < 0.05);
 
+    assert.equal(m('halfDarkSender', 'sender').verdict, 'clean', 'the half-dark design reads');
+    assert.ok(m('halfDarkSender', 'sender').bright > 0.25, `it leaves the frame light: ${m('halfDarkSender', 'sender').bright}`);
+    assert.equal(auto('halfDarkSender').outcome, 'recolor', 'a sender design that leaves much light gives way to recoloring');
+    assert.ok(auto('halfDarkSender').bright < 0.05, `recolored, the frame is dark too: ${auto('halfDarkSender').bright}`);
+
     assert.equal(m('brokenSenderDark', 'sender').verdict, 'broken', 'the broken design is caught');
     assert.deepEqual(auto('brokenSenderDark').attempts.map(a => [a.kind, a.verdict]), [['sender', 'broken'], ['recolor', 'clean']]);
     assert.equal(auto('brokenSenderDark').outcome, 'recolor');
@@ -198,6 +213,7 @@ export async function runSelftest() {
 
     assert.deepEqual(Object.keys(results.lightOnly.modes), ['light'], 'a sender that asks to stay light is never shown dark');
 
+    assert.ok(m('islandText', 'recolor').bright > 0.5, `a cell left as sent keeps its white under a small background image: ${m('islandText', 'recolor').bright}`);
     const t = totals(list);
     assert.equal(t.restoreMismatches, 0);
     assert.equal(t.auto.broken, 0, 'what the reader shows never has broken text');

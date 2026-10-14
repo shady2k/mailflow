@@ -221,6 +221,9 @@
     "noContent": "Kein Nachrichteninhalt gefunden.",
     "remoteImagesBlocked": "Externe Bilder wurden blockiert.",
     "loadImages": "Bilder laden",
+    "trackersBlocked_one": "{{count}} Tracker blockiert",
+    "trackersBlocked_other": "{{count}} Tracker blockiert",
+    "trackersBlockedHint": "Bilder, die dem Absender das Öffnen dieser E-Mail melden, wurden nicht geladen.",
     "allowSender": "Immer erlauben von {{email}}",
     "allowDomain": "Immer erlauben von @{{domain}}",
     "downloading": "Wird heruntergeladen…",
@@ -317,19 +320,19 @@
       "passwordSubmit": "Öffnen",
       "passwordIncorrect": "Falsches Passwort. Versuchen Sie es erneut."
     },
+    "unsnoozed": {
+      "title": "Zurückgeholt",
+      "failTitle": "Zurückholen fehlgeschlagen",
+      "failBody": "Die E-Mail bleibt zurückgestellt. Bitte erneut versuchen."
+    },
+    "snoozeChanged": {
+      "title": "Zurückgestellt bis {{when}}",
+      "failTitle": "Zeitpunkt konnte nicht geändert werden",
+      "failBody": "Der bisherige Zeitpunkt bleibt. Bitte erneut versuchen."
+    },
     "backToList": "Zurück zur Liste"
   },
   "messageList": {
-    "categoryCountsLabel": "Insgesamt {{total}}, ungelesen {{unread}}",
-    "categoryCountUnknown": "Anzahl nicht verfügbar",
-    "categoryEmpty": "Keine Nachrichten in {{category}}",
-    "categoryEmptyUnread": "Keine ungelesenen Nachrichten in {{category}}",
-    "categoryEmptyDesc": "Diese Ansicht zeigt nur die ausgewählte Kategorie.",
-    "folderInboxEmpty": "Posteingang ist leer",
-    "folderEmpty": "Hier ist nichts",
-    "folderInboxEmptyDesc": "Alles erledigt",
-    "folderEmptyDesc": "Dieser Ordner enthält keine Nachrichten",
-    "searching": "Suche…",
     "replyDraftChanged": "Der Antwortentwurf wurde geändert. Öffne ihn erneut.",
     "replyDraftKeepCurrent": "Speichere die aktuelle Nachricht und kläre ihre Anhänge, bevor du diesen Entwurf öffnest.",
     "replyDraftUnavailable": "Dieser Antwortentwurf ist nicht mehr verfügbar.",
@@ -347,6 +350,7 @@
     "compose": "Verfassen",
     "messagesPerPage": "Nachrichten pro Seite",
     "selectAll": "Alle auswählen",
+    "deselectAll": "Alle abwählen",
     "starSelected": "Mit Stern versehen",
     "unstarSelected": "Stern entfernen",
     "markReadSelected": "Als gelesen markieren",
@@ -472,6 +476,18 @@
         "description": "Kompakte Zeilen in voller Breite; Nachrichten per Klick öffnen"
       }
     },
+    "snoozedUntil": "Zurückgestellt bis {{when}}",
+    "snoozedEmpty": "Nichts zurückgestellt",
+    "snoozedEmptyDesc": "Zurückgestellte E-Mails warten hier, bis sie wiederkommen.",
+    "categoryCountsLabel": "Insgesamt {{total}}, ungelesen {{unread}}",
+    "categoryCountUnknown": "Anzahl nicht verfügbar",
+    "categoryEmpty": "Keine Nachrichten in {{category}}",
+    "categoryEmptyUnread": "Keine ungelesenen Nachrichten in {{category}}",
+    "categoryEmptyDesc": "Diese Ansicht zeigt nur die ausgewählte Kategorie.",
+    "folderInboxEmpty": "Posteingang ist leer",
+    "folderEmpty": "Hier ist nichts",
+    "folderInboxEmptyDesc": "Alles erledigt",
+    "folderEmptyDesc": "Dieser Ordner enthält keine Nachrichten",
     "selectCurrentPage": "Aktuelle Seite auswählen",
     "deselectCurrentPage": "Auswahl der aktuellen Seite aufheben",
     "selectLoadedMessages": "Geladene Nachrichten auswählen",
@@ -533,7 +549,8 @@
     "emptying": "„{{name}}” wird geleert…",
     "emptied": "Ordner geleert",
     "backToAccounts": "Zurück zu Konten",
-    "updateAvailable": "Update verfügbar: v{{version}}"
+    "updateAvailable": "Update verfügbar: v{{version}}",
+    "snoozed": "Zurückgestellt"
   },
   "contextMenu": {
     "find": "Suchen",
@@ -555,7 +572,9 @@
       "threeHours": "In 3 Stunden",
       "tomorrowMorning": "Morgen früh",
       "nextWeek": "Nächste Woche",
-      "custom": "Benutzerdefiniert..."
+      "custom": "Benutzerdefiniert...",
+      "change": "Zeitpunkt ändern",
+      "unsnooze": "Zurückholen"
     },
     "copySubject": "Betreff kopieren",
     "copySender": "Absenderadresse kopieren",
@@ -798,6 +817,11 @@
     },
     "title": "Einstellungen",
     "close": "Schließen",
+    "behavior": {
+      "reading": "Lesen",
+      "writing": "Schreiben",
+      "sync": "Synchronisierung"
+    },
     "tabs": {
       "cleanup": "Aufräumen",
       "accounts": "Konten",
@@ -817,12 +841,16 @@
       "antispam": "Antispam",
       "categories": "Kategorien",
       "rules": "Regeln",
+      "groupMail": "Mail",
+      "groupPreferences": "Präferenzen",
+      "groupAiExtensions": "KI und Erweiterungen",
+      "groupAdmin": "Administration",
+      "behavior": "Verhalten",
+      "plugins": "Plugins",
+      "backup": "Sicherung",
       "groupAccountMail": "Konto und Mail",
       "groupDisplay": "Anzeige",
-      "groupSecurityIntegrations": "Sicherheit und Integrationen",
-      "groupAdmin": "Administration",
-      "plugins": "Plugins",
-      "backup": "Sicherung"
+      "groupSecurityIntegrations": "Sicherheit und Integrationen"
     },
     "accounts": {
       "title": "E-Mail-Konten",
@@ -835,6 +863,10 @@
       "editTitle": "Konto bearbeiten",
       "addTitle": "Konto hinzufügen",
       "color": "Kontofarbe",
+      "icon": "Symbol",
+      "iconNone": "Keins (Farbpunkt)",
+      "iconCustom": "Oder ein Emoji eingeben",
+      "iconHint": "Wird anstelle des Farbpunkts angezeigt.",
       "displayName": "Anzeigename",
       "displayNamePh": "z. B. Privates Gmail",
       "senderName": "Absendername",
@@ -1632,6 +1664,8 @@
       "actionForward": "Weiterleiten an",
       "actionForwardPlaceholder": "empfaenger@example.com",
       "actionSetCategory": "Kategorie festlegen",
+      "actionNotify": "Benachrichtigen",
+      "actionNotifyHint": "Auch benachrichtigen, wenn die Regel die E-Mail verschiebt oder als gelesen markiert.",
       "actionSetCategorySelect": "Kategorie auswählen…",
       "nameLabel": "Regelname",
       "editButton": "Bearbeiten",

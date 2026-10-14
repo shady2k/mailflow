@@ -1,5 +1,5 @@
 import { pickReplyAlias } from './replyAlias.js';
-import { unproxyImages } from './imageProxy.js';
+import { api } from './api.js';
 
 export function initialComposeFocus({ isReply = false, isForward = false } = {}) {
   return isReply && !isForward ? 'editor' : 'to';
@@ -79,9 +79,10 @@ export async function openReplyFromMessage(message, { accounts, openCompose, get
   const quotedText = replyBody?.text
     ? `\n\n---\nOn ${replyDate}, ${replyFromStr} wrote:\n${replyBody.text.split('\n').map(l => '> ' + l).join('\n')}`
     : '';
-  // The email's own image references, not MailFlow's proxy URLs, which recipients cannot load.
+  // Quoted as shown, images through MailFlow's proxy, so opening the composer never loads them
+  // from the sender; ComposeModal puts the email's own references back when it saves or sends.
   const quotedBodyHtml = replyBody?.html
-    ? `<div style="border-left:3px solid var(--border,#ccc);padding-left:12px;margin-top:12px;color:var(--text-secondary,#666)"><p style="margin:0 0 6px;font-size:12px">On ${escapeHtml(replyDate)}, ${escapeHtml(replyFromStr)} wrote:</p>${unproxyImages(replyBody.html)}</div>`
+    ? `<div style="border-left:3px solid var(--border,#ccc);padding-left:12px;margin-top:12px;color:var(--text-secondary,#666)"><p style="margin:0 0 6px;font-size:12px">On ${escapeHtml(replyDate)}, ${escapeHtml(replyFromStr)} wrote:</p>${replyBody.html}</div>`
     : null;
 
   openCompose({
@@ -104,7 +105,11 @@ export async function openReplyFromMessage(message, { accounts, openCompose, get
 }
 
 export async function openForwardFromMessage(message, { openCompose, getMessageBody }) {
-  const fwdBody = await getMessageBody(message.id).catch(() => null);
+  let fwdBody = await getMessageBody(message.id).catch(() => null);
+  // Large inline images are fitted for reading; a recipient gets them as they were sent.
+  if (fwdBody?.inlineImagesFitted) {
+    fwdBody = await api.getMessageBody(message.id, Boolean(fwdBody.remoteImagesProxied), { original: true }).catch(() => fwdBody);
+  }
   const fwdDate = message.date ? new Date(message.date).toLocaleString() : '';
   const fwdSafeName = (message.from_name || '').replace(/[\r\n]+/g, ' ');
   const fwdFromStr = fwdSafeName
@@ -116,7 +121,7 @@ export async function openForwardFromMessage(message, { openCompose, getMessageB
 
   const fwdText = `\n\n---------- Forwarded message ----------\nFrom: ${fwdFromStr}\nDate: ${fwdDate}\nSubject: ${safeSubject}${toStr ? `\nTo: ${toStr}` : ''}${ccStr ? `\nCc: ${ccStr}` : ''}\n\n${fwdBody?.text || ''}`;
   const fwdHtml = fwdBody?.html
-    ? `<div style="border-left:3px solid var(--border,#ccc);padding-left:12px;margin-top:12px;color:var(--text-secondary,#666)"><p style="margin:0 0 6px;font-size:12px">---------- Forwarded message ----------<br>From: ${escapeHtml(fwdFromStr)}<br>Date: ${escapeHtml(fwdDate)}<br>Subject: ${escapeHtml(safeSubject)}${toStr ? `<br>To: ${escapeHtml(toStr)}` : ''}${ccStr ? `<br>Cc: ${escapeHtml(ccStr)}` : ''}</p>${unproxyImages(fwdBody.html)}</div>`
+    ? `<div style="border-left:3px solid var(--border,#ccc);padding-left:12px;margin-top:12px;color:var(--text-secondary,#666)"><p style="margin:0 0 6px;font-size:12px">---------- Forwarded message ----------<br>From: ${escapeHtml(fwdFromStr)}<br>Date: ${escapeHtml(fwdDate)}<br>Subject: ${escapeHtml(safeSubject)}${toStr ? `<br>To: ${escapeHtml(toStr)}` : ''}${ccStr ? `<br>Cc: ${escapeHtml(ccStr)}` : ''}</p>${fwdBody.html}</div>`
     : null;
 
   openCompose({

@@ -221,6 +221,9 @@
     "noContent": "No se encontró contenido en el mensaje.",
     "remoteImagesBlocked": "Las imágenes remotas fueron bloqueadas.",
     "loadImages": "Cargar imágenes",
+    "trackersBlocked_one": "{{count}} rastreador bloqueado",
+    "trackersBlocked_other": "{{count}} rastreadores bloqueados",
+    "trackersBlockedHint": "No se cargaron las imágenes que avisan al remitente de que abriste este correo.",
     "allowSender": "Permitir siempre desde {{email}}",
     "allowDomain": "Permitir siempre desde @{{domain}}",
     "downloading": "Descargando…",
@@ -317,19 +320,19 @@
       "passwordSubmit": "Abrir",
       "passwordIncorrect": "Contraseña incorrecta. Inténtalo de nuevo."
     },
+    "unsnoozed": {
+      "title": "Ya no está pospuesto",
+      "failTitle": "No se pudo dejar de posponer",
+      "failBody": "Sigue pospuesto. Inténtalo de nuevo."
+    },
+    "snoozeChanged": {
+      "title": "Pospuesto hasta {{when}}",
+      "failTitle": "No se pudo cambiar la hora",
+      "failBody": "Mantiene la hora anterior. Inténtalo de nuevo."
+    },
     "backToList": "Volver a la lista"
   },
   "messageList": {
-    "categoryCountsLabel": "{{total}} en total, {{unread}} sin leer",
-    "categoryCountUnknown": "Recuento no disponible",
-    "categoryEmpty": "No hay mensajes en {{category}}",
-    "categoryEmptyUnread": "No hay mensajes sin leer en {{category}}",
-    "categoryEmptyDesc": "Esta vista solo muestra la categoría seleccionada.",
-    "folderInboxEmpty": "La bandeja de entrada está vacía",
-    "folderEmpty": "No hay nada aquí",
-    "folderInboxEmptyDesc": "Todo al día",
-    "folderEmptyDesc": "Esta carpeta no tiene mensajes",
-    "searching": "Buscando…",
     "replyDraftChanged": "El borrador de respuesta ha cambiado. Intenta abrirlo de nuevo.",
     "replyDraftKeepCurrent": "Guarda el mensaje actual y resuelve sus adjuntos antes de abrir este borrador.",
     "replyDraftUnavailable": "Este borrador de respuesta ya no está disponible.",
@@ -347,6 +350,7 @@
     "compose": "Redactar",
     "messagesPerPage": "Mensajes por página",
     "selectAll": "Seleccionar todo",
+    "deselectAll": "Deseleccionar todo",
     "starSelected": "Destacar",
     "unstarSelected": "Quitar destacado",
     "markReadSelected": "Marcar como leído",
@@ -472,6 +476,18 @@
         "description": "Filas compactas a todo el ancho; abrir mensajes con un clic"
       }
     },
+    "snoozedUntil": "Pospuesto hasta {{when}}",
+    "snoozedEmpty": "Nada pospuesto",
+    "snoozedEmptyDesc": "El correo pospuesto espera aquí hasta que vuelve.",
+    "categoryCountsLabel": "{{total}} en total, {{unread}} sin leer",
+    "categoryCountUnknown": "Recuento no disponible",
+    "categoryEmpty": "No hay mensajes en {{category}}",
+    "categoryEmptyUnread": "No hay mensajes sin leer en {{category}}",
+    "categoryEmptyDesc": "Esta vista solo muestra la categoría seleccionada.",
+    "folderInboxEmpty": "La bandeja de entrada está vacía",
+    "folderEmpty": "No hay nada aquí",
+    "folderInboxEmptyDesc": "Todo al día",
+    "folderEmptyDesc": "Esta carpeta no tiene mensajes",
     "selectCurrentPage": "Seleccionar la página actual",
     "deselectCurrentPage": "Deseleccionar la página actual",
     "selectLoadedMessages": "Seleccionar mensajes cargados",
@@ -533,7 +549,8 @@
     "emptying": "Vaciando «{{name}}»…",
     "emptied": "Carpeta vaciada",
     "backToAccounts": "Volver a cuentas",
-    "updateAvailable": "Actualización disponible: v{{version}}"
+    "updateAvailable": "Actualización disponible: v{{version}}",
+    "snoozed": "Pospuestos"
   },
   "contextMenu": {
     "find": "Buscar",
@@ -555,7 +572,9 @@
       "threeHours": "En 3 horas",
       "tomorrowMorning": "Mañana por la mañana",
       "nextWeek": "La próxima semana",
-      "custom": "Personalizado..."
+      "custom": "Personalizado...",
+      "change": "Cambiar la hora",
+      "unsnooze": "Dejar de posponer"
     },
     "categorize": "Categorizar como…",
     "categoryAlwaysSender": "Siempre para este remitente",
@@ -798,6 +817,11 @@
     },
     "title": "Ajustes",
     "close": "Cerrar",
+    "behavior": {
+      "reading": "Lectura",
+      "writing": "Redacción",
+      "sync": "Sincronización"
+    },
     "tabs": {
       "cleanup": "Limpieza",
       "accounts": "Cuentas",
@@ -817,12 +841,16 @@
       "aiActions": "Acciones de IA",
       "antispam": "Antispam",
       "categories": "Categorías",
+      "groupMail": "Correo",
+      "groupPreferences": "Preferencias",
+      "groupAiExtensions": "IA y extensiones",
+      "groupAdmin": "Administración",
+      "behavior": "Comportamiento",
+      "plugins": "Complementos",
+      "backup": "Copia de seguridad",
       "groupAccountMail": "Cuenta y correo",
       "groupDisplay": "Visualización",
-      "groupSecurityIntegrations": "Seguridad e integraciones",
-      "groupAdmin": "Administración",
-      "plugins": "Complementos",
-      "backup": "Copia de seguridad"
+      "groupSecurityIntegrations": "Seguridad e integraciones"
     },
     "rules": {
       "title": "Reglas de bandeja de entrada",
@@ -864,6 +892,8 @@
       "actionForward": "Reenviar a",
       "actionForwardPlaceholder": "destinatario@example.com",
       "actionSetCategory": "Establecer categoría",
+      "actionNotify": "Notificarme",
+      "actionNotifyHint": "Avisarme aunque la regla mueva este correo o lo marque como leído.",
       "actionSetCategorySelect": "Selecciona una categoría…",
       "actionMovePlaceholder": "Nombre de la carpeta",
       "stopProcessing": "Detener el procesamiento de reglas posteriores si esta coincide",
@@ -908,6 +938,10 @@
       "editTitle": "Editar cuenta",
       "addTitle": "Añadir cuenta",
       "color": "Color de cuenta",
+      "icon": "Icono",
+      "iconNone": "Ninguno (punto de color)",
+      "iconCustom": "O escribe un emoji",
+      "iconHint": "Se muestra en lugar del punto de color.",
       "displayName": "Nombre visible",
       "displayNamePh": "ej. Gmail del trabajo",
       "email": "Dirección de correo",

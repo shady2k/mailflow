@@ -221,6 +221,9 @@
     "noContent": "未找到邮件内容。",
     "remoteImagesBlocked": "已阻止加载远程图片。",
     "loadImages": "加载图片",
+    "trackersBlocked_one": "已拦截 {{count}} 个跟踪器",
+    "trackersBlocked_other": "已拦截 {{count}} 个跟踪器",
+    "trackersBlockedHint": "未加载会向发件人报告你已打开此邮件的图片。",
     "allowSender": "始终允许来自 {{email}} 的图片",
     "allowDomain": "始终允许来自 @{{domain}} 的图片",
     "downloading": "下载中…",
@@ -317,19 +320,19 @@
       "passwordSubmit": "打开",
       "passwordIncorrect": "密码错误，请重试。"
     },
+    "unsnoozed": {
+      "title": "已恢复",
+      "failTitle": "无法恢复",
+      "failBody": "邮件仍处于暂停状态。请重试。"
+    },
+    "snoozeChanged": {
+      "title": "暂停至 {{when}}",
+      "failTitle": "无法更改提醒时间",
+      "failBody": "保留原来的时间。请重试。"
+    },
     "backToList": "返回列表"
   },
   "messageList": {
-    "categoryCountsLabel": "共 {{total}} 封，未读 {{unread}} 封",
-    "categoryCountUnknown": "数量不可用",
-    "categoryEmpty": "{{category}}中没有邮件",
-    "categoryEmptyUnread": "{{category}}中没有未读邮件",
-    "categoryEmptyDesc": "此视图仅显示所选分类。",
-    "folderInboxEmpty": "收件箱为空",
-    "folderEmpty": "这里没有内容",
-    "folderInboxEmptyDesc": "所有邮件已处理",
-    "folderEmptyDesc": "此文件夹中没有邮件",
-    "searching": "正在搜索…",
     "replyDraftChanged": "回复草稿已更改。请尝试重新打开。",
     "replyDraftKeepCurrent": "打开此草稿前，请保存当前邮件并处理其附件。",
     "replyDraftUnavailable": "此回复草稿已不可用。",
@@ -347,6 +350,7 @@
     "compose": "撰写",
     "messagesPerPage": "每页邮件数",
     "selectAll": "全选",
+    "deselectAll": "取消全选",
     "starSelected": "加星标",
     "unstarSelected": "取消星标",
     "markReadSelected": "标为已读",
@@ -472,6 +476,18 @@
         "description": "全宽紧凑列表；点击打开邮件"
       }
     },
+    "snoozedUntil": "暂停至 {{when}}",
+    "snoozedEmpty": "没有暂停的邮件",
+    "snoozedEmptyDesc": "暂停的邮件会在这里等待，直到恢复。",
+    "categoryCountsLabel": "共 {{total}} 封，未读 {{unread}} 封",
+    "categoryCountUnknown": "数量不可用",
+    "categoryEmpty": "{{category}}中没有邮件",
+    "categoryEmptyUnread": "{{category}}中没有未读邮件",
+    "categoryEmptyDesc": "此视图仅显示所选分类。",
+    "folderInboxEmpty": "收件箱为空",
+    "folderEmpty": "这里没有内容",
+    "folderInboxEmptyDesc": "所有邮件已处理",
+    "folderEmptyDesc": "此文件夹中没有邮件",
     "selectCurrentPage": "选择当前页",
     "deselectCurrentPage": "取消选择当前页",
     "selectLoadedMessages": "选择已加载的邮件",
@@ -533,7 +549,8 @@
     "emptying": "正在清空「{{name}}」…",
     "emptied": "文件夹已清空",
     "backToAccounts": "返回账户列表",
-    "updateAvailable": "有可用更新：v{{version}}"
+    "updateAvailable": "有可用更新：v{{version}}",
+    "snoozed": "已暂停"
   },
   "contextMenu": {
     "find": "查找",
@@ -555,7 +572,9 @@
       "threeHours": "3 小时后",
       "tomorrowMorning": "明天上午",
       "nextWeek": "下周",
-      "custom": "自定义……"
+      "custom": "自定义……",
+      "change": "更改提醒时间",
+      "unsnooze": "立即恢复"
     },
     "categorize": "分类为…",
     "categoryAlwaysSender": "始终用于此发件人",
@@ -798,6 +817,11 @@
     },
     "title": "设置",
     "close": "关闭",
+    "behavior": {
+      "reading": "阅读",
+      "writing": "撰写",
+      "sync": "同步"
+    },
     "tabs": {
       "cleanup": "清理",
       "accounts": "账户",
@@ -817,12 +841,16 @@
       "aiActions": "AI 操作",
       "antispam": "反垃圾邮件",
       "categories": "分类",
+      "groupMail": "邮件",
+      "groupPreferences": "偏好设置",
+      "groupAiExtensions": "AI 与扩展",
+      "groupAdmin": "管理",
+      "behavior": "行为",
+      "plugins": "插件",
+      "backup": "备份",
       "groupAccountMail": "账户与邮件",
       "groupDisplay": "显示",
-      "groupSecurityIntegrations": "安全与集成",
-      "groupAdmin": "管理",
-      "plugins": "插件",
-      "backup": "备份"
+      "groupSecurityIntegrations": "安全与集成"
     },
     "rules": {
       "title": "收件箱规则",
@@ -864,6 +892,8 @@
       "actionForward": "转发至",
       "actionForwardPlaceholder": "shoujianren@example.com",
       "actionSetCategory": "设置分类",
+      "actionNotify": "通知我",
+      "actionNotifyHint": "即使规则移动此邮件或将其标为已读，也通知我。",
       "actionSetCategorySelect": "选择分类…",
       "actionMovePlaceholder": "文件夹名称",
       "actionMoveSelectFolder": "选择文件夹…",
@@ -908,6 +938,10 @@
       "editTitle": "编辑账户",
       "addTitle": "添加账户",
       "color": "账户颜色",
+      "icon": "图标",
+      "iconNone": "无（颜色圆点）",
+      "iconCustom": "或输入一个表情符号",
+      "iconHint": "显示在颜色圆点的位置。",
       "displayName": "显示名称",
       "displayNamePh": "例如：工作 Gmail",
       "senderName": "发件人姓名",

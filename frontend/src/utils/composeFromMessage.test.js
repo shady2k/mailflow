@@ -294,22 +294,23 @@ describe('quoted body templates', () => {
 
   // Proxied images (MailFlow's image proxy) go out as the email's own references: recipients cannot
   // load MailFlow's proxy.
-  it('quotes the email\'s own image URLs in a reply and a forward, not proxy URLs', async () => {
+  it('quotes images as shown, through the proxy, so the composer never loads them from the sender', async () => {
+    // ComposeModal puts the email's own references back when it saves or sends
+    // (ComposeModal.imageProxy.render.test.js).
     const proxied = '<img src="/api/mail/messages/4d479e4f-9b21-4013-9c07-3fbc35f275b1/image?u=https%3A%2F%2Fimg.example%2Fa.png%3Fx%3D1%26amp%3By%3D2">';
-    const original = '<img src="https://img.example/a.png?x=1&amp;y=2">';
     const reply = harness({ html: proxied });
     await openReplyFromMessage(
       { account_id: 'a', date, from_email: 'f@example.com' },
       { accounts: [], openCompose: reply.openCompose, getMessageBody: reply.getMessageBody },
     );
-    assert.ok(reply.payload().quotedBodyHtml.endsWith(`${original}</div>`), reply.payload().quotedBodyHtml);
+    assert.ok(reply.payload().quotedBodyHtml.endsWith(`${proxied}</div>`), reply.payload().quotedBodyHtml);
     const forward = harness({ html: proxied });
     await openForwardFromMessage(
       { id: 'm1', date, from_email: 'ann@example.com', subject: 'Hello' },
       { openCompose: forward.openCompose, getMessageBody: forward.getMessageBody },
     );
-    assert.ok(forward.payload().quotedBodyHtml.endsWith(`${original}</div>`));
-    assert.doesNotMatch(forward.payload().quotedBodyHtml, /\/api\/mail/);
+    assert.ok(forward.payload().quotedBodyHtml.endsWith(`${proxied}</div>`));
+    assert.doesNotMatch(forward.payload().quotedBodyHtml, /src="https?:/, 'no image points at the sender');
   });
 
   it('forward without html keeps the text scaffold', async () => {
@@ -379,4 +380,29 @@ describe('quote headers escape what the sender wrote', () => {
     assert.match(html, /To: Bo &lt;i&gt;/);
     assert.doesNotMatch(html, /<img|<b>|<i>/);
   });
+});
+
+// Large inline images are fitted for reading (backend services/inlineImageFit.js): a forward asks
+// for them as they were sent, so the recipient gets the original photo.
+describe('openForwardFromMessage and fitted inline images', () => {
+  const message = { id: 'm1', account_id: 'a', subject: 'Photos', from_email: 'f@example.com', to_addresses: [], cc_addresses: [] };
+  const withFetch = async (fn) => {
+    const asked = [];
+    const real = globalThis.fetch;
+    globalThis.fetch = async (url) => { asked.push(String(url)); return { ok: true, status: 200, json: async () => ({ html: '<img src="data:image/jpeg;base64,ORIGINAL">', attachments: [] }) }; };
+    try { await fn(asked); } finally { globalThis.fetch = real; }
+  };
+
+  it('forwards the originals when what is shown was fitted', async () => withFetch(async (asked) => {
+    const h = harness({ html: '<img src="data:image/webp;base64,FITTED">', inlineImagesFitted: true, remoteImagesProxied: true, attachments: [] });
+    await openForwardFromMessage(message, { openCompose: h.openCompose, getMessageBody: h.getMessageBody });
+    assert.deepEqual(asked, ['/api/mail/messages/m1/body?remoteImages=1&original=1']);
+    assert.match(h.payload().quotedBodyHtml, /ORIGINAL/);
+  }));
+
+  it('asks for nothing more when nothing was fitted', async () => withFetch(async (asked) => {
+    const h = harness({ html: '<p>Hi</p>', attachments: [] });
+    await openForwardFromMessage(message, { openCompose: h.openCompose, getMessageBody: h.getMessageBody });
+    assert.deepEqual(asked, []);
+  }));
 });

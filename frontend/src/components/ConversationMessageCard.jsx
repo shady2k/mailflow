@@ -16,6 +16,7 @@ import AiResultBox from './AiResultBox.jsx';
 import { useAiActions } from '../hooks/useAiActions.js';
 import { BUILTIN_SUMMARIZE } from '../aiActions.js';
 import { formatDateTime } from '../utils/formatDate.js';
+import { bodyCache } from '../utils/bodyCache.js';
 
 // One message inside a conversation.
 //
@@ -115,6 +116,13 @@ export default function ConversationMessageCard({ message, expanded, onToggle, o
   useEffect(() => {
     if (!expanded || fetchedRef.current === message.id) return;
     fetchedRef.current = message.id;
+    // Seen before, in this view or the reading pane, or loaded ahead: no round trip.
+    const cached = bodyCache.get(message.id);
+    if (cached) {
+      setBody(cached);
+      setError(null);
+      return;
+    }
     setLoading(true);
     setError(null);
     fetchMessageBodyWithRetry(message.id, {
@@ -122,10 +130,8 @@ export default function ConversationMessageCard({ message, expanded, onToggle, o
       isCancelled: () => !mountedRef.current,
     })
       .then(data => {
-        if (mountedRef.current) {
-          setBody(data);
-          if (data.complete === false) fetchedRef.current = null;
-        }
+        bodyCache.set(message.id, data);
+        if (mountedRef.current) { setBody(data); if (data.complete === false) fetchedRef.current = null; }
       })
       .catch(err => {
         if (!mountedRef.current) return;
@@ -141,12 +147,14 @@ export default function ConversationMessageCard({ message, expanded, onToggle, o
   const [showAiMenu, setShowAiMenu] = useState(false);
   const runAi = (action) => { setShowAiMenu(false); ai.run(action); };
 
+  // Fills at once, as in the list and the reading pane; put back if the server refuses it.
   const handleStar = async () => {
     const starred = !message.is_starred;
+    onUpdate?.(message.id, { is_starred: starred });
     try {
       await api.markStarred(message.id, starred);
-      onUpdate?.(message.id, { is_starred: starred });
     } catch (err) {
+      onUpdate?.(message.id, { is_starred: !starred });
       addNotification({ type: 'error', title: t('common.error', { message: err.message }) });
     }
   };
@@ -178,7 +186,10 @@ export default function ConversationMessageCard({ message, expanded, onToggle, o
       if (!expanded || !body?.hasBlockedRemoteImages || remoteRequestedRef.current === message.id) return;
       remoteRequestedRef.current = message.id;
       api.getMessageBody(message.id, true)
-        .then(data => { if (messageRef.current.id === message.id) setBody(data); })
+        .then(data => {
+          bodyCache.set(message.id, data);
+          if (messageRef.current.id === message.id) setBody(data);
+        })
         .catch(() => { remoteRequestedRef.current = null; });
     };
     const onUnsubscribe = async () => {

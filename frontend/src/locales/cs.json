@@ -161,19 +161,10 @@
     "emptying": "Vyprazdňování složky „{{name}}“…",
     "emptied": "Složka vyprázdněna",
     "backToAccounts": "Zpět k účtům",
-    "updateAvailable": "Je dostupná aktualizace: v{{version}}"
+    "updateAvailable": "Je dostupná aktualizace: v{{version}}",
+    "snoozed": "Odložené"
   },
   "messageList": {
-    "categoryCountsLabel": "Celkem {{total}}, nepřečtené {{unread}}",
-    "categoryCountUnknown": "Počet není k dispozici",
-    "categoryEmpty": "Žádné zprávy v {{category}}",
-    "categoryEmptyUnread": "Žádné nepřečtené zprávy v {{category}}",
-    "categoryEmptyDesc": "Toto zobrazení obsahuje pouze vybranou kategorii.",
-    "folderInboxEmpty": "Doručená pošta je prázdná",
-    "folderEmpty": "Nic tu není",
-    "folderInboxEmptyDesc": "Vše je vyřízeno",
-    "folderEmptyDesc": "Tato složka neobsahuje zprávy",
-    "searching": "Hledání…",
     "replyDraftChanged": "Koncept odpovědi se změnil. Zkuste jej znovu otevřít.",
     "replyDraftKeepCurrent": "Před otevřením tohoto konceptu uložte aktuální zprávu a vyřešte její přílohy.",
     "replyDraftUnavailable": "Tento koncept odpovědi již není dostupný.",
@@ -191,6 +182,7 @@
     "compose": "Napsat",
     "messagesPerPage": "Zpráv na stránku",
     "selectAll": "Vybrat vše",
+    "deselectAll": "Zrušit výběr",
     "starSelected": "Označit hvězdičkou",
     "unstarSelected": "Odebrat hvězdičku",
     "markReadSelected": "Označit jako přečtené",
@@ -328,6 +320,18 @@
         "description": "Husté řádky přes celou šířku; zprávy otevřete kliknutím"
       }
     },
+    "snoozedUntil": "Odloženo do {{when}}",
+    "snoozedEmpty": "Nic není odloženo",
+    "snoozedEmptyDesc": "Odložené zprávy tu čekají, dokud se nevrátí.",
+    "categoryCountsLabel": "Celkem {{total}}, nepřečtené {{unread}}",
+    "categoryCountUnknown": "Počet není k dispozici",
+    "categoryEmpty": "Žádné zprávy v {{category}}",
+    "categoryEmptyUnread": "Žádné nepřečtené zprávy v {{category}}",
+    "categoryEmptyDesc": "Toto zobrazení obsahuje pouze vybranou kategorii.",
+    "folderInboxEmpty": "Doručená pošta je prázdná",
+    "folderEmpty": "Nic tu není",
+    "folderInboxEmptyDesc": "Vše je vyřízeno",
+    "folderEmptyDesc": "Tato složka neobsahuje zprávy",
     "selectCurrentPage": "Vybrat aktuální stránku",
     "deselectCurrentPage": "Zrušit výběr aktuální stránky",
     "selectLoadedMessages": "Vybrat načtené zprávy",
@@ -356,6 +360,9 @@
     "noContent": "Nebyl nalezen žádný obsah zprávy.",
     "remoteImagesBlocked": "Vzdálené obrázky byly zablokovány.",
     "loadImages": "Načíst obrázky",
+    "trackersBlocked_one": "Zablokované sledovací prvky: {{count}}",
+    "trackersBlocked_other": "Zablokované sledovací prvky: {{count}}",
+    "trackersBlockedHint": "Obrázky, které odesílateli hlásí otevření tohoto e-mailu, nebyly načteny.",
     "allowSender": "Vždy povolit od {{email}}",
     "allowDomain": "Vždy povolit z @{{domain}}",
     "downloading": "Stahování…",
@@ -451,6 +458,16 @@
       "passwordLabel": "Heslo k PDF",
       "passwordSubmit": "Otevřít",
       "passwordIncorrect": "Nesprávné heslo. Zkuste to znovu."
+    },
+    "unsnoozed": {
+      "title": "Vráceno",
+      "failTitle": "Zprávu se nepodařilo vrátit",
+      "failBody": "Zpráva zůstává odložená. Zkuste to znovu."
+    },
+    "snoozeChanged": {
+      "title": "Odloženo do {{when}}",
+      "failTitle": "Čas návratu se nepodařilo změnit",
+      "failBody": "Zůstává původní čas. Zkuste to znovu."
     },
     "backToList": "Zpět na seznam"
   },
@@ -623,7 +640,9 @@
       "threeHours": "Za 3 hodiny",
       "tomorrowMorning": "Zítra ráno",
       "nextWeek": "Příští týden",
-      "custom": "Vlastní…"
+      "custom": "Vlastní…",
+      "change": "Změnit čas návratu",
+      "unsnooze": "Vrátit hned"
     },
     "categorize": "Zařadit jako…",
     "categoryAlwaysSender": "Vždy pro tohoto odesílatele",
@@ -988,6 +1007,11 @@
     },
     "title": "Nastavení",
     "close": "Zavřít",
+    "behavior": {
+      "reading": "Čtení",
+      "writing": "Psaní",
+      "sync": "Synchronizace"
+    },
     "tabs": {
       "cleanup": "Úklid",
       "accounts": "Účty",
@@ -1007,12 +1031,16 @@
       "aiActions": "Akce AI",
       "antispam": "Antispam",
       "categories": "Kategorie",
+      "groupMail": "Pošta",
+      "groupPreferences": "Předvolby",
+      "groupAiExtensions": "AI a rozšíření",
+      "groupAdmin": "Správa",
+      "behavior": "Chování",
+      "plugins": "Pluginy",
+      "backup": "Záloha",
       "groupAccountMail": "Účet a pošta",
       "groupDisplay": "Zobrazení",
-      "groupSecurityIntegrations": "Zabezpečení a integrace",
-      "groupAdmin": "Správa",
-      "plugins": "Pluginy",
-      "backup": "Záloha"
+      "groupSecurityIntegrations": "Zabezpečení a integrace"
     },
     "categories": {
       "title": "Kategorie e-mailů",
@@ -1089,6 +1117,10 @@
       "editTitle": "Upravit účet",
       "addTitle": "Přidat účet",
       "color": "Barva účtu",
+      "icon": "Ikona",
+      "iconNone": "Žádná (barevná tečka)",
+      "iconCustom": "Nebo napište emoji",
+      "iconHint": "Zobrazí se místo barevné tečky.",
       "displayName": "Zobrazovaný název",
       "displayNamePh": "např. Pracovní Gmail",
       "senderName": "Jméno odesílatele",
@@ -1244,6 +1276,8 @@
       "actionForward": "Přeposlat na",
       "actionForwardPlaceholder": "prijemce@example.com",
       "actionSetCategory": "Nastavit kategorii",
+      "actionNotify": "Upozornit mě",
+      "actionNotifyHint": "Upozornit, i když pravidlo e-mail přesune nebo označí jako přečtený.",
       "actionSetCategorySelect": "Vyberte kategorii…",
       "actionMovePlaceholder": "Přesná cesta ke složce IMAP (např. Práce nebo INBOX/Práce)",
       "actionMoveSelectFolder": "Vyberte složku…",

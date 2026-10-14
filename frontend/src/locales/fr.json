@@ -221,6 +221,9 @@
     "noContent": "Aucun contenu trouvé dans ce message.",
     "remoteImagesBlocked": "Les images distantes ont été bloquées.",
     "loadImages": "Charger les images",
+    "trackersBlocked_one": "{{count}} traceur bloqué",
+    "trackersBlocked_other": "{{count}} traceurs bloqués",
+    "trackersBlockedHint": "Les images qui signalent à l'expéditeur que vous avez ouvert cet e-mail n'ont pas été chargées.",
     "allowSender": "Toujours autoriser depuis {{email}}",
     "allowDomain": "Toujours autoriser depuis @{{domain}}",
     "downloading": "Téléchargement…",
@@ -317,19 +320,19 @@
       "passwordSubmit": "Ouvrir",
       "passwordIncorrect": "Mot de passe incorrect. Réessayez."
     },
+    "unsnoozed": {
+      "title": "Plus en attente",
+      "failTitle": "Impossible d'annuler la mise en attente",
+      "failBody": "Le message reste en attente. Réessayez."
+    },
+    "snoozeChanged": {
+      "title": "En attente jusqu'à {{when}}",
+      "failTitle": "Impossible de modifier l'heure de retour",
+      "failBody": "L'heure précédente est conservée. Réessayez."
+    },
     "backToList": "Retour à la liste"
   },
   "messageList": {
-    "categoryCountsLabel": "{{total}} au total, {{unread}} non lus",
-    "categoryCountUnknown": "Nombre indisponible",
-    "categoryEmpty": "Aucun message dans {{category}}",
-    "categoryEmptyUnread": "Aucun message non lu dans {{category}}",
-    "categoryEmptyDesc": "Cette vue affiche uniquement la catégorie sélectionnée.",
-    "folderInboxEmpty": "La boîte de réception est vide",
-    "folderEmpty": "Rien ici",
-    "folderInboxEmptyDesc": "Tout est à jour",
-    "folderEmptyDesc": "Ce dossier ne contient aucun message",
-    "searching": "Recherche…",
     "replyDraftChanged": "Le brouillon de réponse a changé. Essayez de le rouvrir.",
     "replyDraftKeepCurrent": "Enregistrez le message actuel et gérez ses pièces jointes avant d’ouvrir ce brouillon.",
     "replyDraftUnavailable": "Ce brouillon de réponse n’est plus disponible.",
@@ -347,6 +350,7 @@
     "compose": "Composer",
     "messagesPerPage": "Messages par page",
     "selectAll": "Tout sélectionner",
+    "deselectAll": "Tout désélectionner",
     "starSelected": "Étoiler",
     "unstarSelected": "Retirer l'étoile",
     "markReadSelected": "Marquer comme lu",
@@ -472,6 +476,18 @@
         "description": "Lignes compactes sur toute la largeur ; ouvrir par un clic"
       }
     },
+    "snoozedUntil": "En attente jusqu'à {{when}}",
+    "snoozedEmpty": "Rien en attente",
+    "snoozedEmptyDesc": "Les messages mis en attente patientent ici jusqu'à leur retour.",
+    "categoryCountsLabel": "{{total}} au total, {{unread}} non lus",
+    "categoryCountUnknown": "Nombre indisponible",
+    "categoryEmpty": "Aucun message dans {{category}}",
+    "categoryEmptyUnread": "Aucun message non lu dans {{category}}",
+    "categoryEmptyDesc": "Cette vue affiche uniquement la catégorie sélectionnée.",
+    "folderInboxEmpty": "La boîte de réception est vide",
+    "folderEmpty": "Rien ici",
+    "folderInboxEmptyDesc": "Tout est à jour",
+    "folderEmptyDesc": "Ce dossier ne contient aucun message",
     "selectCurrentPage": "Sélectionner la page actuelle",
     "deselectCurrentPage": "Désélectionner la page actuelle",
     "selectLoadedMessages": "Sélectionner les messages chargés",
@@ -533,7 +549,8 @@
     "emptying": "Vidage de « {{name}} »…",
     "emptied": "Dossier vidé",
     "backToAccounts": "Retour aux comptes",
-    "updateAvailable": "Mise à jour disponible : v{{version}}"
+    "updateAvailable": "Mise à jour disponible : v{{version}}",
+    "snoozed": "En attente"
   },
   "contextMenu": {
     "find": "Rechercher",
@@ -555,7 +572,9 @@
       "threeHours": "Dans 3 heures",
       "tomorrowMorning": "Demain matin",
       "nextWeek": "La semaine prochaine",
-      "custom": "Personnalisé..."
+      "custom": "Personnalisé...",
+      "change": "Modifier l'heure de retour",
+      "unsnooze": "Ne plus mettre en attente"
     },
     "categorize": "Catégoriser comme…",
     "categoryAlwaysSender": "Toujours pour cet expéditeur",
@@ -798,6 +817,11 @@
     },
     "title": "Paramètres",
     "close": "Fermer",
+    "behavior": {
+      "reading": "Lecture",
+      "writing": "Rédaction",
+      "sync": "Synchronisation"
+    },
     "tabs": {
       "cleanup": "Nettoyage",
       "accounts": "Comptes",
@@ -817,12 +841,16 @@
       "aiActions": "Actions IA",
       "antispam": "Antispam",
       "categories": "Catégories",
+      "groupMail": "Courrier",
+      "groupPreferences": "Préférences",
+      "groupAiExtensions": "IA et extensions",
+      "groupAdmin": "Administration",
+      "behavior": "Comportement",
+      "plugins": "Extensions",
+      "backup": "Sauvegarde",
       "groupAccountMail": "Compte et courrier",
       "groupDisplay": "Affichage",
-      "groupSecurityIntegrations": "Sécurité et intégrations",
-      "groupAdmin": "Administration",
-      "plugins": "Extensions",
-      "backup": "Sauvegarde"
+      "groupSecurityIntegrations": "Sécurité et intégrations"
     },
     "rules": {
       "title": "Règles de boîte de réception",
@@ -864,6 +892,8 @@
       "actionForward": "Transférer à",
       "actionForwardPlaceholder": "destinataire@example.com",
       "actionSetCategory": "Définir la catégorie",
+      "actionNotify": "Me notifier",
+      "actionNotifyHint": "Me prévenir même si la règle déplace ce message ou le marque comme lu.",
       "actionSetCategorySelect": "Choisir une catégorie…",
       "actionMovePlaceholder": "Nom du dossier",
       "stopProcessing": "Arrêter le traitement des règles suivantes si celle-ci correspond",
@@ -908,6 +938,10 @@
       "editTitle": "Modifier le compte",
       "addTitle": "Ajouter un compte",
       "color": "Couleur du compte",
+      "icon": "Icône",
+      "iconNone": "Aucune (point de couleur)",
+      "iconCustom": "Ou saisissez un emoji",
+      "iconHint": "Affichée à la place du point de couleur.",
       "displayName": "Nom affiché",
       "displayNamePh": "ex. Gmail professionnel",
       "email": "Adresse e-mail",

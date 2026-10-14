@@ -221,6 +221,9 @@
     "noContent": "Содержимое сообщения не найдено.",
     "remoteImagesBlocked": "Удалённые изображения заблокированы.",
     "loadImages": "Загрузить изображения",
+    "trackersBlocked_one": "Заблокировано трекеров: {{count}}",
+    "trackersBlocked_other": "Заблокировано трекеров: {{count}}",
+    "trackersBlockedHint": "Изображения, сообщающие отправителю об открытии этого письма, не загружены.",
     "allowSender": "Всегда разрешать от {{email}}",
     "allowDomain": "Всегда разрешать от @{{domain}}",
     "downloading": "Загрузка…",
@@ -317,19 +320,19 @@
       "passwordSubmit": "Открыть",
       "passwordIncorrect": "Неверный пароль. Попробуйте ещё раз."
     },
+    "unsnoozed": {
+      "title": "Возвращено",
+      "failTitle": "Не удалось вернуть письмо",
+      "failBody": "Письмо остаётся отложенным. Попробуйте ещё раз."
+    },
+    "snoozeChanged": {
+      "title": "Отложено до {{when}}",
+      "failTitle": "Не удалось изменить время возврата",
+      "failBody": "Остаётся прежнее время. Попробуйте ещё раз."
+    },
     "backToList": "Назад к списку"
   },
   "messageList": {
-    "categoryCountsLabel": "Всего {{total}}, непрочитанных {{unread}}",
-    "categoryCountUnknown": "Количество неизвестно",
-    "categoryEmpty": "В категории «{{category}}» нет писем",
-    "categoryEmptyUnread": "В категории «{{category}}» нет непрочитанных писем",
-    "categoryEmptyDesc": "Здесь показана только выбранная категория.",
-    "folderInboxEmpty": "Входящие пусты",
-    "folderEmpty": "Здесь пока пусто",
-    "folderInboxEmptyDesc": "Все письма разобраны",
-    "folderEmptyDesc": "В этой папке нет писем",
-    "searching": "Ищем…",
     "replyDraftChanged": "Черновик ответа изменился. Попробуйте открыть его снова.",
     "replyDraftKeepCurrent": "Сохраните текущее сообщение и разберитесь с вложениями перед открытием этого черновика.",
     "replyDraftUnavailable": "Этот черновик ответа больше недоступен.",
@@ -347,6 +350,7 @@
     "compose": "Написать",
     "messagesPerPage": "Сообщений на странице",
     "selectAll": "Выбрать все",
+    "deselectAll": "Снять выделение",
     "starSelected": "Отметить звездой",
     "unstarSelected": "Убрать звезду",
     "markReadSelected": "Отметить как прочитанное",
@@ -472,6 +476,18 @@
         "description": "Плотные строки на всю ширину; письмо открывается по клику"
       }
     },
+    "snoozedUntil": "Отложено до {{when}}",
+    "snoozedEmpty": "Нет отложенных писем",
+    "snoozedEmptyDesc": "Отложенные письма ждут здесь, пока не вернутся.",
+    "categoryCountsLabel": "Всего {{total}}, непрочитанных {{unread}}",
+    "categoryCountUnknown": "Количество неизвестно",
+    "categoryEmpty": "В категории «{{category}}» нет писем",
+    "categoryEmptyUnread": "В категории «{{category}}» нет непрочитанных писем",
+    "categoryEmptyDesc": "Здесь показана только выбранная категория.",
+    "folderInboxEmpty": "Входящие пусты",
+    "folderEmpty": "Здесь пока пусто",
+    "folderInboxEmptyDesc": "Все письма разобраны",
+    "folderEmptyDesc": "В этой папке нет писем",
     "selectCurrentPage": "Выбрать текущую страницу",
     "deselectCurrentPage": "Снять выбор на текущей странице",
     "selectLoadedMessages": "Выбрать загруженные письма",
@@ -533,7 +549,8 @@
     "emptying": "Очистка «{{name}}»…",
     "emptied": "Папка очищена",
     "backToAccounts": "Назад к аккаунтам",
-    "updateAvailable": "Доступно обновление: v{{version}}"
+    "updateAvailable": "Доступно обновление: v{{version}}",
+    "snoozed": "Отложенные"
   },
   "contextMenu": {
     "find": "Найти",
@@ -555,7 +572,9 @@
       "threeHours": "Через 3 часа",
       "tomorrowMorning": "Завтра утром",
       "nextWeek": "На следующей неделе",
-      "custom": "Другое..."
+      "custom": "Другое...",
+      "change": "Изменить время возврата",
+      "unsnooze": "Вернуть сейчас"
     },
     "categorize": "Категоризировать как…",
     "categoryAlwaysSender": "Всегда для этого отправителя",
@@ -798,6 +817,11 @@
     },
     "title": "Настройки",
     "close": "Закрыть",
+    "behavior": {
+      "reading": "Чтение",
+      "writing": "Написание",
+      "sync": "Синхронизация"
+    },
     "tabs": {
       "cleanup": "Очистка",
       "accounts": "Аккаунты",
@@ -817,12 +841,16 @@
       "aiActions": "ИИ-действия",
       "antispam": "Антиспам",
       "categories": "Категории",
+      "groupMail": "Почта",
+      "groupPreferences": "Предпочтения",
+      "groupAiExtensions": "ИИ и расширения",
+      "groupAdmin": "Администрирование",
+      "behavior": "Поведение",
+      "plugins": "Плагины",
+      "backup": "Резервная копия",
       "groupAccountMail": "Аккаунт и почта",
       "groupDisplay": "Отображение",
-      "groupSecurityIntegrations": "Безопасность и интеграции",
-      "groupAdmin": "Администрирование",
-      "plugins": "Плагины",
-      "backup": "Резервная копия"
+      "groupSecurityIntegrations": "Безопасность и интеграции"
     },
     "rules": {
       "title": "Правила входящих",
@@ -864,6 +892,8 @@
       "actionForward": "Переслать на",
       "actionForwardPlaceholder": "poluchatel@example.com",
       "actionSetCategory": "Назначить категорию",
+      "actionNotify": "Уведомлять меня",
+      "actionNotifyHint": "Уведомлять, даже если правило перемещает письмо или отмечает его прочитанным.",
       "actionSetCategorySelect": "Выберите категорию…",
       "actionMovePlaceholder": "Название папки",
       "stopProcessing": "Остановить обработку следующих правил при совпадении",
@@ -908,6 +938,10 @@
       "editTitle": "Редактировать аккаунт",
       "addTitle": "Добавить аккаунт",
       "color": "Цвет аккаунта",
+      "icon": "Значок",
+      "iconNone": "Нет (цветная точка)",
+      "iconCustom": "Или введите эмодзи",
+      "iconHint": "Показывается вместо цветной точки.",
       "displayName": "Отображаемое имя",
       "displayNamePh": "например, Рабочий Gmail",
       "email": "Адрес электронной почты",
