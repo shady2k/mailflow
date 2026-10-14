@@ -1,3 +1,4 @@
+import { snippetFromBody } from './messageParser.js';
 import { sanitizeEmail } from './emailSanitizer.js';
 import { Parser } from 'htmlparser2';
 
@@ -89,11 +90,13 @@ export class BodyIndexer {
         if (!cache.rows.length) return;
       }
       await this.query(`UPDATE messages SET search_body_text = $1, body_indexed_at = now(),
-        body_index_error = NULL, body_index_retry_at = NULL, body_index_lease_until = NULL
+        body_index_error = NULL, body_index_retry_at = NULL, body_index_lease_until = NULL,
+        snippet = CASE WHEN COALESCE(snippet, '') = '' THEN $8 ELSE snippet END
         WHERE id = $2 AND uid = $3 AND folder = $4
           AND message_id IS NOT DISTINCT FROM $5 AND NOT is_deleted
           AND body_text IS NOT DISTINCT FROM $6 AND body_html IS NOT DISTINCT FROM $7`,
-      [text, row.id, row.uid, row.folder, row.message_id, cachedText, cachedHtml]);
+      [text, row.id, row.uid, row.folder, row.message_id, cachedText, cachedHtml,
+        snippetFromBody(body.readerBody?.text ?? body.text, body.readerBody?.html ?? body.html).replace(/\0/g, '')]);
     } catch (err) {
       if (err.backgroundDeferred) {
         await this.query(`UPDATE messages SET body_index_lease_until = NULL,
