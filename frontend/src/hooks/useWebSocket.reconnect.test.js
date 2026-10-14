@@ -266,6 +266,34 @@ test('mobile suspend/resume repairs a fresh-looking OPEN without network events'
   }
 });
 
+test('stranded projection recovery requests fresh authority; retry settles only post-request STATUS', async () => {
+  const root=createRoot(document.getElementById('root'));const oldCounts=api.getUnreadCounts,oldNow=Date.now;
+  let now=oldNow(),fresh=false,requested=[];Date.now=()=>now;
+  const removeList=registerConnectionRefresh('messages',async()=>true),removeCategories=registerConnectionRefresh('categories',async()=>true);
+  useStore.getState().setUser({id:'synthetic-recovery-user'});useStore.getState().setLocked(false);
+  const {countWriteState}=await import('../utils/countWrites.js');
+  useStore.setState({accounts:[{id:'a',enabled:true}],folders:{},pendingCounts:{a:{base:1,delta:-1,openedAt:now-3600000,expiresAt:now+15000,sinceRevision:'10',ackBarrier:'900',ackWriteVersion:countWriteState().version}}});
+  api.getUnreadCounts=async options=>{
+    requested.push(options?.refresh);
+    return {userId:'synthetic-recovery-user',total:0,byAccount:{a:0},complete:true,
+      barrierRevision:'31',recoveryBarrierRevision:'29',countWriteVersion:countWriteState().version,countWritesPending:0,
+      snapshots:{a:{known:true,stale:false,observedAt:new Date().toISOString(),revision:fresh?'30':'29',recoveryBarrierRevision:'29'}}};
+  };
+  try {
+    await React.act(async()=>root.render(React.createElement(App)));socket.readyState=WebSocket.OPEN;await React.act(async()=>confirm(socket));
+    await React.act(async()=>window.dispatchEvent(new window.Event('online')));socket.readyState=WebSocket.OPEN;await React.act(async()=>confirm(socket));
+    assert.equal(useStore.getState().connectionStatus.phase,'refreshError','a cached sample cannot clear the warning');
+    assert.ok(useStore.getState().pendingCounts.a);
+    fresh=true;now+=1100;
+    await React.act(async()=>window.dispatchEvent(new CustomEvent('mailflow:connection-retry')));
+    assert.equal(requested.at(-1),true);assert.deepEqual(useStore.getState().pendingCounts,{});
+    assert.equal(useStore.getState().connectionStatus.phase,'healthy');
+  } finally {
+    await React.act(async()=>root.unmount());removeList();removeCategories();api.getUnreadCounts=oldCounts;Date.now=oldNow;
+    useStore.setState({pendingCounts:{},accounts:[],folders:{}});
+  }
+});
+
 test('loaded folder snapshots participate in catch-up and late disconnected folders cannot apply', async () => {
   const root=createRoot(document.getElementById('root'));
   const oldCounts=api.getUnreadCounts, oldFolders=api.getFolders;

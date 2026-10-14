@@ -53,6 +53,11 @@ export function settleCountPending(pending, server, now = Date.now(), canAcknowl
     const snapshot = server?.snapshots?.[id];
     const observed = snapshot?.known !== false && !snapshot?.stale
       && observedRevision(snapshot) > BigInt(p.sinceRevision || '0');
+    const recovered = canAcknowledge && snapshot?.known === true && !snapshot.stale
+      && server.recoveryBarrierRevision != null
+      && snapshot.recoveryBarrierRevision === server.recoveryBarrierRevision
+      && observedRevision(snapshot) > BigInt(server.recoveryBarrierRevision);
+    if (recovered) continue;
     if (server.barrierRevision != null) {
       const currentBarrier = p.ackWriteVersion === writeVersion ? p.ackBarrier : null;
       const barrier = currentBarrier ?? (canAcknowledge ? String(server.barrierRevision) : null);

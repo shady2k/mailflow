@@ -29,3 +29,15 @@ export async function getUnreadCountSnapshot(userId) {
   return { schemaVersion: 1, kind: 'inbox-unread', userId, showAppBadge: rows[0]?.show_app_badge !== false,
     barrierRevision: rows[0]?.barrier_revision ?? null, total, byAccount, snapshots, complete };
 }
+
+// Recovery needs proof of a sample started after its request, not just a recently cached count.
+export async function getFreshUnreadCountSnapshot(userId, refreshAccount) {
+  const { rows: [watermark] } = await query("SELECT last_value::text AS revision FROM folder_status_revision");
+  const { rows: accounts } = await query("SELECT * FROM email_accounts WHERE user_id=$1 AND enabled AND protocol='imap'", [userId]);
+  await Promise.allSettled(accounts.map(account => refreshAccount(account)));
+  const snapshot = await getUnreadCountSnapshot(userId);
+  for (const value of Object.values(snapshot.snapshots)) {
+    value.recoveryBarrierRevision = watermark.revision;
+  }
+  return { ...snapshot, recoveryBarrierRevision: watermark.revision };
+}

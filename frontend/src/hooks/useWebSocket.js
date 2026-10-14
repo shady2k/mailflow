@@ -66,7 +66,7 @@ export function useWebSocket() {
         const state = useStore.getState();
         const folderAccounts = Object.keys(state.folders).filter(id => state.accounts.some(account => account.id === id));
         const [counts, ...folders] = await Promise.all([
-          api.getUnreadCounts(), ...folderAccounts.map(id => api.getFolders(id)),
+          api.getUnreadCounts({ refresh: Object.keys(state.pendingCounts).length > 0 && countWriteState().pending === 0 }), ...folderAccounts.map(id => api.getFolders(id)),
         ]);
         if (!current() || useStore.getState().user?.id !== state.user?.id) return false;
         useStore.getState().setUnreadCounts(counts);
@@ -76,7 +76,12 @@ export function useWebSocket() {
         const complete = counts.complete !== false && writes === 0 && projections === 0;
         if (!complete) recordDiagEvent({ category: 'ws', type: 'counts_deferred',
           cause: counts.complete === false ? 'stale_snapshot' : writes ? 'pending_write' : 'pending_projection',
-          writes, projections });
+          writes, projections,
+          acknowledgement: Object.values(useStore.getState().pendingCounts).map(p => ({
+            base: p.base, delta: p.delta, sinceRevision: p.sinceRevision,
+            ackBarrier: p.ackBarrier, ackWriteVersion: p.ackWriteVersion,
+            ageMs: Math.max(0, Date.now() - p.openedAt), stale: !!p.stale,
+          })) });
         return complete;
       }),
       new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Refresh timeout')), 30000); }),

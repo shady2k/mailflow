@@ -30,3 +30,14 @@ test('copy uses the shared request client and emits the lock event on 423', asyn
     globalThis.CustomEvent = originalCustomEvent;
   }
 });
+
+test('fresh unread recovery preserves per-request write watermark metadata', async () => {
+  const oldFetch=globalThis.fetch;let requested;
+  globalThis.fetch=async(url)=>{requested=url;return {ok:true,json:async()=>({byAccount:{},barrierRevision:'10'})};};
+  try {
+    const {api}=await import('./api.js');
+    const result=await api.getUnreadCounts({refresh:true});
+    assert.equal(requested,'/api/mail/unread-counts?refresh=1');
+    assert.equal(typeof result.countWriteVersion,'number');assert.equal(result.countWritesPending,0);
+  } finally {globalThis.fetch=oldFetch;}
+});

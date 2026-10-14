@@ -190,3 +190,27 @@ describe('unreadDeltaByAccount (#476 badge attribution)', () => {
     assert.equal(unreadDeltaByAccount(null, true, 'work').size, 0);
   });
 });
+
+test('fresh post-request authority releases a stranded projection at baseline or target, not by age', () => {
+  const initial = sample(1,0,'10');
+  const pending = { a: { ...adjustCountPending({},initial,'a',-1,0).a, ackBarrier:'900', ackWriteVersion:2 } };
+  const cached = {...sample(0,0,'20'),barrierRevision:'25'};
+  assert.ok(settleCountPending(pending,cached,3600000,true,2).a,'cached responses retain blocked projection');
+  for (const value of [0,1,2]) {
+    const fresh={...sample(value,0,'30'),barrierRevision:'31',recoveryBarrierRevision:'29'};
+    fresh.snapshots.a.recoveryBarrierRevision='29';
+    assert.deepEqual(settleCountPending(pending,fresh,3600000,true,2),{},'fresh authority wins, including failed mutation baseline or concurrent arrivals');
+    assert.ok(settleCountPending(pending,fresh,3600000,false,2).a,'active or overlapping writes cannot be cleared');
+    fresh.snapshots.a.stale=true;
+    assert.ok(settleCountPending(pending,fresh,3600000,true,2).a,'failed STATUS cannot settle');
+    fresh.snapshots.a.stale=false;fresh.recoveryBarrierRevision='30';fresh.snapshots.a.recoveryBarrierRevision='30';
+    assert.ok(settleCountPending(pending,fresh,3600000,true,2).a,'pre-request observation cannot settle');
+  }
+});
+test('a cached higher revision kept by merge cannot borrow fresh response proof', () => {
+  const initial=sample(1,0,'40');const pending=adjustCountPending({},initial,'a',-1,0);
+  const fresh={...sample(0,0,'30'),barrierRevision:'31',recoveryBarrierRevision:'29'};
+  fresh.snapshots.a.recoveryBarrierRevision='29';
+  const merged=mergeCountSnapshots(initial,fresh);
+  assert.ok(settleCountPending(pending,merged,3600000,true,0).a);
+});

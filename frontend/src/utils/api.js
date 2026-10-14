@@ -24,7 +24,7 @@ async function request(method, path, body, extraHeaders) {
   const affectsCounts = method !== 'GET' && (path.startsWith('/mail/') || path.startsWith('/rules/') || path.startsWith('/categories/'));
   const finish = affectsCounts ? beginCategoryRequest() : () => {};
   const finishCountWrite = affectsCounts ? beginCountWrite() : () => {};
-  const countReadState = path === '/mail/unread-counts' ? countWriteState() : null;
+  const countReadState = path.split('?')[0] === '/mail/unread-counts' ? countWriteState() : null;
   try {
     const res = await fetch(BASE + path, opts);
     if (!res.ok) {
@@ -364,7 +364,7 @@ export const api = {
   bulkMove: (ids, folder) => request('POST', '/mail/messages/bulk-move', { ids, folder }),
   copyMessage: (id, folder) => request('POST', `/mail/messages/${encodeURIComponent(id)}/copy`, { folder }),
   bulkArchive: (ids) => request('POST', '/mail/messages/bulk-archive', { ids }),
-  getUnreadCounts: () => request('GET', '/mail/unread-counts'),
+  getUnreadCounts: ({ refresh = false } = {}) => request('GET', '/mail/unread-counts' + (refresh ? '?refresh=1' : '')),
 
   // Mailbox cleanup (read-only analysis; actual cleanup reuses bulkDelete above).
   mailboxUsage: (accountId) => request('GET', `/mail/mailbox-usage?accountId=${encodeURIComponent(accountId)}`),

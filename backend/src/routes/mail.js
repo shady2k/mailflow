@@ -1,5 +1,5 @@
 import { bodyDiagnostics } from '../services/bodyDiagnostics.js';
-import { getUnreadCountSnapshot } from '../services/unreadCountSnapshot.js';
+import { getUnreadCountSnapshot, getFreshUnreadCountSnapshot } from '../services/unreadCountSnapshot.js';
 import { Router } from 'express';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -356,7 +356,9 @@ router.get('/thread/:threadId', (req, res) => getThread(req, res, req.params.thr
 
 // Counts are snapshots independently measured on the IMAP server, never cache tallies.
 router.get('/unread-counts', async (req, res) => {
-  const snapshot = await getUnreadCountSnapshot(req.session.userId);
+  const snapshot = req.query.refresh === '1'
+    ? await getFreshUnreadCountSnapshot(req.session.userId, account => imapManager.folderStatusMonitor.refresh(account, { force: true }))
+    : await getUnreadCountSnapshot(req.session.userId);
   res.set('Cache-Control', 'no-store');
   res.json(snapshot);
 });
