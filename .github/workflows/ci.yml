@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["main", "feat/unicode-body-search-and-inbox-layout", "test/integrated-indexing-cache-locale", "fix/search-pending-feedback", "fix/category-total-counts", "fix/systemic-integration-v2", "integration/upstream-20261013", "fix/list-window-recovery-20261013", "integration/upstream-20261014", "integration/upstream-20261016"]
+    branches: ["main", "feat/unicode-body-search-and-inbox-layout", "test/integrated-indexing-cache-locale", "fix/search-pending-feedback", "fix/category-total-counts", "fix/systemic-integration-v2", "integration/upstream-20261013", "fix/list-window-recovery-20261013", "integration/upstream-20261014", "integration/upstream-20261016", "fix/ai-actions-full-text-20261016"]
   pull_request:
     branches: ["main"]
 

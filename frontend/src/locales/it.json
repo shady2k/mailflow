@@ -255,6 +255,7 @@
     "summaryDismiss": "Chiudi riepilogo",
     "aiActions": "Azioni IA",
     "manageAiActions": "Gestisci azioni…",
+    "aiInputTooLong": "Il messaggio e l’istruzione sono troppo lunghi ({{count}} caratteri; massimo {{max}}). Non è stato inviato nulla all’IA.",
     "aiRegenerate": "Rigenera",
     "aiExpand": "Espandi",
     "aiCollapse": "Comprimi",

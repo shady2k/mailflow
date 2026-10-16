@@ -255,6 +255,7 @@
     "summaryDismiss": "Dismiss summary",
     "aiActions": "AI actions",
     "manageAiActions": "Manage actions…",
+    "aiInputTooLong": "The email and instruction are too long ({{count}} characters; maximum {{max}}). Nothing was sent to AI.",
     "aiRegenerate": "Regenerate",
     "aiExpand": "Expand",
     "aiCollapse": "Collapse",

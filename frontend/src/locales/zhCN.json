@@ -255,6 +255,7 @@
     "summaryDismiss": "关闭摘要",
     "aiActions": "AI 操作",
     "manageAiActions": "管理操作…",
+    "aiInputTooLong": "邮件和指令过长（{{count}} 个字符；最多 {{max}} 个）。未向 AI 发送任何内容。",
     "aiRegenerate": "重新生成",
     "aiExpand": "展开",
     "aiCollapse": "收起",

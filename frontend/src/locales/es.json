@@ -255,6 +255,7 @@
     "summaryDismiss": "Cerrar resumen",
     "aiActions": "Acciones de IA",
     "manageAiActions": "Gestionar acciones…",
+    "aiInputTooLong": "El correo y la instrucción son demasiado largos ({{count}} caracteres; máximo {{max}}). No se ha enviado nada a la IA.",
     "aiRegenerate": "Regenerar",
     "aiExpand": "Expandir",
     "aiCollapse": "Contraer",

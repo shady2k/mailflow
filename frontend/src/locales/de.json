@@ -255,6 +255,7 @@
     "summaryDismiss": "Zusammenfassung schließen",
     "aiActions": "KI-Aktionen",
     "manageAiActions": "Aktionen verwalten…",
+    "aiInputTooLong": "E-Mail und Anweisung sind zu lang ({{count}} Zeichen; maximal {{max}}). Es wurde nichts an die KI gesendet.",
     "aiRegenerate": "Neu generieren",
     "aiExpand": "Erweitern",
     "aiCollapse": "Einklappen",

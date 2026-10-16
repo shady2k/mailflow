@@ -394,6 +394,7 @@
     "summaryDismiss": "Zavřít shrnutí",
     "aiActions": "Akce AI",
     "manageAiActions": "Spravovat akce…",
+    "aiInputTooLong": "E-mail a pokyn jsou příliš dlouhé ({{count}} znaků; maximum {{max}}). AI nebylo nic odesláno.",
     "aiRegenerate": "Vygenerovat znovu",
     "aiExpand": "Rozbalit",
     "aiCollapse": "Sbalit",

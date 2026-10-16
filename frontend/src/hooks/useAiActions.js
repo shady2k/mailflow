@@ -70,9 +70,14 @@ export function useAiActions(messageId, body) {
     // language (#255). Custom actions keep their author's prompt as-is.
     const promptText = action.builtin ? summarizePromptForLocale(i18n.language) : action.prompt;
     try {
+      const content = `${promptText}\n\n${textContent}`;
+      // Match backend routes/ai.js: the budget includes the instruction and separators.
+      if (content.length > 32_000) {
+        throw new Error(t('message.aiInputTooLong', { count: content.length, max: 32_000 }));
+      }
       const fullText = await api.ai.chat([{
         role: 'user',
-        content: `${promptText}\n\n${textContent.slice(0, 6000)}`,
+        content,
       }], {
         signal: ctrl.signal,
         onDelta: (text) => {

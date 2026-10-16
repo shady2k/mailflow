@@ -255,6 +255,7 @@
     "summaryDismiss": "Fermer le résumé",
     "aiActions": "Actions IA",
     "manageAiActions": "Gérer les actions…",
+    "aiInputTooLong": "Le message et la consigne sont trop longs ({{count}} caractères ; maximum {{max}}). Rien n’a été envoyé à l’IA.",
     "aiRegenerate": "Régénérer",
     "aiExpand": "Développer",
     "aiCollapse": "Réduire",

@@ -257,6 +257,7 @@
     "summaryDismiss": "Odrzuć podsumowanie",
     "aiActions": "Działania AI",
     "manageAiActions": "Zarządzaj działaniami…",
+    "aiInputTooLong": "Wiadomość i instrukcja są zbyt długie ({{count}} znaków; maksymalnie {{max}}). Nic nie wysłano do AI.",
     "aiRegenerate": "Wygeneruj ponownie",
     "aiExpand": "Rozwiń",
     "aiCollapse": "Zwiń",
