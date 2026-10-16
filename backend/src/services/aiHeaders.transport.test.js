@@ -58,7 +58,7 @@ describe('shared AI transport against synthetic HTTP server', () => {
   });
   it('does not forward custom headers to another redirect origin', async () => {
     redirect = true;
-    await expect(completeText([{ role: 'user', content: 'synthetic redirect' }])).rejects.toThrow('AI provider request failed');
+    await expect(completeText([{ role: 'user', content: 'synthetic redirect' }])).rejects.toThrow('AI provider redirected the request (302)');
     expect(redirectedRequests).toBe(0); redirect = false;
   });
 });

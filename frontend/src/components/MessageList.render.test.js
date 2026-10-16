@@ -551,7 +551,7 @@ test('pagination errors preserve results and offer a localized retry', async () 
   await React.act(async () => retry.click());
   assert.equal(calls[2].options.offset, 1);
   await React.act(async () => calls[2].resolve({messages: []}));
-  assert.doesNotMatch(container.querySelector('[role="status"]').textContent, /messageList.searchFailed/);
+  assert.doesNotMatch(container.querySelector('[role="status"]')?.textContent || '', /messageList.searchFailed/);
   await React.act(async () => root.unmount()); root = null;
 });
 
@@ -891,16 +891,19 @@ test('infinite select-all includes loaded rows only and newly appended rows rema
 test('search live region reserves space only for an active query', async () => {
   await mount({ rows: [MESSAGE], threadedView: false, folder: 'All Mail' });
   const region = () => container.querySelector('[role="status"][aria-live="polite"]');
-  assert.equal(region().style.height, '0px');
-  assert.equal(region().getAttribute('aria-atomic'), 'true');
+  assert.equal(region(), null);
   const calls = deferredSearch();
   await querySearch('synthetic');
-  assert.equal(region().style.height, '28px');
+  const slot = region().parentElement;
+  assert.equal(slot.style.height, '34px');
+  assert.equal(region().getAttribute('aria-atomic'), 'true');
   await pauseSearch();
   await React.act(async () => calls[0].resolve({ messages: [MESSAGE] }));
-  assert.equal(region().style.height, '28px');
+  assert.equal(region(), null);
+  assert.equal(slot.isConnected, true);
+  assert.equal(slot.style.height, '34px');
   await querySearch('   ');
-  assert.equal(region().style.height, '0px');
+  assert.equal(slot.isConnected, false);
 });
 
 test('Archive read/unread and archive Undo do not charge the account INBOX', async () => {

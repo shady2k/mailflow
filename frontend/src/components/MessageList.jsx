@@ -3596,16 +3596,16 @@ export default function MessageList() {
         </div>
       )}
 
-      <div role="status" aria-live="polite" aria-atomic="true" style={{ height: searchQuery.trim() ? 28 : 0, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 14px', fontSize: 12, color: 'var(--text-secondary)' }}>
-        {searchQuery.trim() && (isSearching || searchLoadingMore) && <>
+      {searchQuery.trim() && <div style={{ height: 34, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 14px', fontSize: 12, color: 'var(--text-secondary)' }}>
+        {(isSearching || searchLoadingMore) && <div role="status" aria-live="polite" aria-atomic="true" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <span className="search-spinner" aria-hidden="true" />
           <span>{t('messageList.searching')}</span>
-        </>}
-        {searchQuery.trim() && !isSearching && !searchLoadingMore && searchError && displayMessages.length > 0 && <>
+        </div>}
+        {!isSearching && !searchLoadingMore && searchError && displayMessages.length > 0 && <div role="status" aria-live="polite">
           <span>{t('messageList.searchFailed')}</span>
           <button onClick={loadMoreSearch} style={{ color: 'var(--accent)', background: 'none', border: 0, cursor: 'pointer' }}>{t('common.retry')}</button>
-        </>}
-      </div>
+        </div>}
+      </div>}
       {/* Message list */}
       <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
         <div
@@ -4212,7 +4212,7 @@ export default function MessageList() {
         {/* Infinite scroll footer */}
         {scrollMode === 'infinite' && (<>
           {/* Search mode: load more search results */}
-          {searchQuery.trim() ? (<>
+          {searchQuery.trim() ? (!isSearching && <>
             {searchLoadingMore && (
               <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 12 }}>
                 <div style={{
@@ -4270,7 +4270,7 @@ export default function MessageList() {
         </>)}
 
         {/* Pagination footer */}
-        {scrollMode === 'paginated' && !loadingMessages && messagesTotal > 0 && (() => {
+        {scrollMode === 'paginated' && !searchQuery.trim() && !loadingMessages && messagesTotal > 0 && (() => {
           const totalPages = Math.ceil(messagesTotal / pageSize) || 1;
           const btnStyle = (disabled) => ({
             padding: '5px 14px', fontSize: 12, borderRadius: 6, cursor: disabled ? 'default' : 'pointer',

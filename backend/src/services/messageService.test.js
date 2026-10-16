@@ -77,6 +77,38 @@ describe('listMessages — account scope', () => {
     expect(sql).not.toContain('paged_threads');
   });
 
+  // The snooze route files mail under the path the server gave the Snoozed folder: INBOX.Snoozed on a
+  // server with an INBOX. namespace prefix. Outside the folder named Snoozed, the view lists the
+  // messages whose own snooze record names the folder they are in, and counts them by row: a folder
+  // Snoozed was renamed to holds other mail too. Each row carries its record's folder, which the
+  // client's menu goes by.
+  it.each([
+    ['all', undefined, ''],
+    ['unread', 'true', ' AND m.is_read = false'],
+  ])('the Snoozed view also lists and counts the snoozed mail in other folders (%s)', async (_scope, unreadOnly, unreadSql) => {
+    query
+      .mockResolvedValueOnce({ rows: [{ id: 'acc-1', include_in_unified_inbox: true }] })
+      .mockResolvedValueOnce({ rows: [{ n: 1 }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await listMessages({ userId: 'user-1', folder: 'Snoozed', unreadOnly });
+
+    const snoozedElsewhere = '(m.folder = ANY(ARRAY(SELECT DISTINCT sm.snoozed_folder FROM snoozed_messages sm WHERE sm.account_id = ANY($1)))'
+      + ' AND EXISTS (SELECT 1 FROM snoozed_messages own WHERE own.account_id = m.account_id'
+      + ' AND own.message_id_header = m.message_id AND own.snoozed_folder = m.folder))';
+    const [countSql, countParams] = query.mock.calls[1];
+    expect(countSql).toContain('COUNT(*)');
+    expect(countSql).toContain(snoozedElsewhere);
+    expect(countSql).toContain('m.is_deleted = false');
+    if (unreadSql) expect(countSql).toContain(unreadSql);
+    expect(countParams).toEqual([['acc-1']]);
+    const [sql, params] = query.mock.calls[2];
+    expect(sql).toContain(`(m.folder = 'Snoozed' OR ${snoozedElsewhere})${unreadSql}`);
+    expect(params[0]).toEqual(['acc-1']);
+    expect(sql).toContain('sz.snooze_until, sz.snoozed_folder');
+    expect(sql).toContain('SELECT sm.snooze_until, sm.snoozed_folder FROM snoozed_messages sm');
+  });
+
   it('other folders read no snooze times and keep their order', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 'acc-included', include_in_unified_inbox: true }] })
