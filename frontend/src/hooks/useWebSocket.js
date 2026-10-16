@@ -92,9 +92,14 @@ export function useWebSocket() {
     ]);
     refreshPromise.current = work;
     work.then(success => {
-      if (current() && success) {
+      if (!current()) return;
+      if (success) {
         setStatus('healthy');
         dispatchPluginReconnect();
+      } else {
+        // A superseded read or pending count barrier is not a failed request.
+        // Keep readiness pending and retry; only a rejection/timeout shows an error.
+        refreshTimer.current = setTimeout(reconcile, 5000);
       }
     }).catch(() => {
       if (!current()) return;
@@ -522,7 +527,7 @@ export function useWebSocket() {
       if (Date.now() - lastRetry.current < 1000 || authBlocked.current) return;
       lastRetry.current = Date.now();
       if (wsRef.current?.readyState === WebSocket.CONNECTING) return;
-      if (wsRef.current?.readyState === WebSocket.OPEN) reconcile();
+      if (wsRef.current?.readyState === WebSocket.OPEN && wsRef.current._confirmed) reconcile();
       else connect();
     };
     const offline = () => {

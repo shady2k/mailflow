@@ -16,7 +16,7 @@ export function registerConnectionRefresh(name, task) {
 export async function refreshConnectionData(isCurrent, refreshCounts) {
   while (isCurrent()) {
     const scopeRevision = revision;
-    if (!tasks.has('messages') || !tasks.has('categories')) throw new Error('Messages unavailable');
+    if (!tasks.has('messages') || !tasks.has('categories')) return false;
     const consumers = [['counts', refreshCounts], ...tasks];
     const results = await Promise.allSettled(consumers.map(([, task]) => task(isCurrent)));
     if (!isCurrent()) return false;
@@ -28,7 +28,7 @@ export async function refreshConnectionData(isCurrent, refreshCounts) {
     });
     const failure = results.find(result => result.status === 'rejected');
     if (failure) throw failure.reason;
-    if (results.some(result => result.value === false)) throw new Error('Refresh superseded');
+    if (results.some(result => result.value === false)) return false;
     return true;
   }
   return false;

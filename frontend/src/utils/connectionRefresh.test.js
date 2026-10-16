@@ -24,8 +24,8 @@ test('navigation re-runs current scope; expired generations never signal success
   const obsolete=refreshConnectionData(()=>current,async()=>true);current=false;late.resolve(true);
   assert.equal(await obsolete,false);c();d();b();
 });
-test('missing active consumers or rejected superseded results cannot hide warning', async () => {
-  await assert.rejects(refreshConnectionData(()=>true,async()=>true),/unavailable/);
+test('missing consumers and superseded results defer readiness without reporting a failed request', async () => {
+  assert.equal(await refreshConnectionData(()=>true,async()=>true),false);
   const a=registerConnectionRefresh('messages',async()=>false),b=registerConnectionRefresh('categories',async()=>true);
-  await assert.rejects(refreshConnectionData(()=>true,async()=>true),/superseded/);a();b();
+  assert.equal(await refreshConnectionData(()=>true,async()=>true),false);a();b();
 });

@@ -792,7 +792,7 @@ test('connection catch-up during archive undo delay cannot restore removed rows/
   api.bulkArchive=async()=>({archived:[MESSAGE.id]});
   try {
     await React.act(async()=>shortcutBus.emit('archive'));
-    await React.act(async()=>assert.rejects(refreshConnectionData(()=>true,async()=>true),/superseded/));
+    await React.act(async()=>assert.equal(await refreshConnectionData(()=>true,async()=>true),false));
     assert.equal(useStore.getState().categoryTotals.primary,0);
     assert.equal(useStore.getState().messages.some(m=>m.id===MESSAGE.id),false);
     const toast=useStore.getState().notifications.find(n=>n.onUndo);

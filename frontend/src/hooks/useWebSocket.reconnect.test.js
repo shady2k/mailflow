@@ -282,7 +282,7 @@ test('stranded projection recovery requests fresh authority; retry settles only 
   try {
     await React.act(async()=>root.render(React.createElement(App)));socket.readyState=WebSocket.OPEN;await React.act(async()=>confirm(socket));
     await React.act(async()=>window.dispatchEvent(new window.Event('online')));socket.readyState=WebSocket.OPEN;await React.act(async()=>confirm(socket));
-    assert.equal(useStore.getState().connectionStatus.phase,'refreshError','a cached sample cannot clear the warning');
+    assert.equal(useStore.getState().connectionStatus.phase,'refreshing','a cached sample cannot clear readiness or claim a failed request');
     assert.ok(useStore.getState().pendingCounts.a);
     fresh=true;now+=1100;
     await React.act(async()=>window.dispatchEvent(new CustomEvent('mailflow:connection-retry')));
@@ -291,6 +291,64 @@ test('stranded projection recovery requests fresh authority; retry settles only 
   } finally {
     await React.act(async()=>root.unmount());removeList();removeCategories();api.getUnreadCounts=oldCounts;Date.now=oldNow;
     useStore.setState({pendingCounts:{},accounts:[],folders:{}});
+  }
+});
+
+for (const deferredPart of ['counts', 'messages']) test(`a deferred ${deferredPart} refresh retries without a false error and becomes healthy only after catch-up`, async () => {
+  const root = createRoot(document.getElementById('root'));
+  const originalCounts = api.getUnreadCounts, originalTimeout = globalThis.setTimeout, originalClear = globalThis.clearTimeout;
+  const retries = new Map(); let timerId = 80000, ready = false, listCalls = 0;
+  globalThis.setTimeout = (fn, delay, ...args) => {
+    if (delay === 5000) { retries.set(++timerId, fn); return timerId; }
+    return originalTimeout(fn, delay, ...args);
+  };
+  globalThis.clearTimeout = id => { if (!retries.delete(id)) originalClear(id); };
+  const removeMessages = registerConnectionRefresh('messages', async () => { listCalls++; return deferredPart !== 'messages' || ready; });
+  const removeCategories = registerConnectionRefresh('categories', async () => true);
+  useStore.setState({ folders: {}, pendingCounts: {}, categoryPendingRemovals: {} });
+  api.getUnreadCounts = async () => ({ byAccount: {}, complete: deferredPart !== 'counts' || ready });
+  try {
+    await React.act(async () => root.render(React.createElement(App)));
+    socket.readyState = WebSocket.OPEN; await React.act(async () => confirm(socket));
+    await React.act(async () => window.dispatchEvent(new window.Event('online')));
+    socket.readyState = WebSocket.OPEN; await React.act(async () => confirm(socket));
+    assert.equal(listCalls, 1, 'the message request itself completed');
+    assert.equal(useStore.getState().connectionStatus.phase, 'refreshing');
+    assert.equal(retries.size, 1, 'incomplete readiness has a bounded automatic retry');
+    ready = true;
+    await React.act(async () => { const [id, retry] = [...retries][0]; retries.delete(id); retry(); });
+    assert.equal(listCalls, 2);
+    assert.equal(useStore.getState().connectionStatus.phase, 'healthy');
+    assert.equal(retries.size, 0);
+  } finally {
+    await React.act(async () => root.unmount());
+    removeMessages(); removeCategories(); api.getUnreadCounts = originalCounts;
+    globalThis.setTimeout = originalTimeout; globalThis.clearTimeout = originalClear;
+  }
+});
+
+test('manual retry replaces an OPEN socket still awaiting authentication instead of doing nothing', async () => {
+  const root = createRoot(document.getElementById('root'));
+  const originalCounts = api.getUnreadCounts;
+  const removeMessages = registerConnectionRefresh('messages', async () => true);
+  const removeCategories = registerConnectionRefresh('categories', async () => true);
+  api.getUnreadCounts = async () => ({ byAccount: {}, complete: true });
+  useStore.setState({ folders: {}, pendingCounts: {} });
+  try {
+    await React.act(async () => root.render(React.createElement(App)));
+    const unconfirmed = socket;
+    socket.readyState = WebSocket.OPEN;
+    await React.act(async () => socket.onopen());
+    useStore.getState().setConnectionStatus({ phase: 'refreshError' });
+    await React.act(async () => window.dispatchEvent(new CustomEvent('mailflow:connection-retry')));
+    assert.notEqual(socket, unconfirmed);
+    assert.equal(useStore.getState().connectionStatus.phase, 'connecting');
+    socket.readyState = WebSocket.OPEN;
+    await React.act(async () => confirm(socket));
+    assert.equal(useStore.getState().connectionStatus.phase, 'healthy');
+  } finally {
+    await React.act(async () => root.unmount());
+    removeMessages(); removeCategories(); api.getUnreadCounts = originalCounts;
   }
 });
 
