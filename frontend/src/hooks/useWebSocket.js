@@ -53,6 +53,8 @@ export function useWebSocket() {
   const refreshGeneration = useRef(0);
   const refreshTimer = useRef(null);
   const refreshPromise = useRef(null);
+  const readinessWake = useRef(false);
+  const countsDeferred = useRef(false);
   const lastRetry = useRef(0);
   const setStatus = useCallback((phase) => {
     if (mountedRef.current) useStore.getState().setConnectionStatus({ phase });
@@ -61,6 +63,8 @@ export function useWebSocket() {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN || !ws._confirmed || refreshPromise.current) return;
     clearTimeout(refreshTimer.current);
+    readinessWake.current = false;
+    countsDeferred.current = false;
     const generation = ++refreshGeneration.current;
     const current = () => mountedRef.current && refreshGeneration.current === generation && wsRef.current === ws && ws.readyState === WebSocket.OPEN;
     setStatus('refreshing');
@@ -78,6 +82,7 @@ export function useWebSocket() {
         const writes = countWriteState().pending;
         const projections = Object.keys(useStore.getState().pendingCounts).length;
         const complete = counts.complete !== false && writes === 0 && projections === 0;
+        countsDeferred.current = !complete;
         if (!complete) recordDiagEvent({ category: 'ws', type: 'counts_deferred',
           cause: counts.complete === false ? 'stale_snapshot' : writes ? 'pending_write' : 'pending_projection',
           writes, projections,
@@ -109,6 +114,12 @@ export function useWebSocket() {
     }).finally(() => {
       clearTimeout(deadline);
       if (refreshPromise.current === work) refreshPromise.current = null;
+      if (readinessWake.current && current() && useStore.getState().connectionStatus.phase === 'refreshing') {
+        clearTimeout(refreshTimer.current);
+        refreshTimer.current = setTimeout(() => {
+          if (useStore.getState().connectionStatus.phase === 'refreshing') reconcile();
+        }, 0);
+      }
     });
   }, [setStatus]);
   // True once the socket has connected at least once. Distinguishes the initial
@@ -537,13 +548,38 @@ export function useWebSocket() {
       clearTimeout(refreshTimer.current);
       setStatus('offline');
     };
+    // Fresh authority or a newly mounted consumer can resolve a deferred gate before the watchdog.
+    const wakeReadiness = (cause) => {
+      if (!mountedRef.current) return;
+      if (useStore.getState().connectionStatus.phase !== 'refreshing') return;
+      readinessWake.current = true;
+      recordDiagEvent({ category: 'ws', type: 'readiness_wake', cause });
+      if (refreshPromise.current) return;
+      clearTimeout(refreshTimer.current);
+      refreshTimer.current = setTimeout(() => {
+        if (useStore.getState().connectionStatus.phase === 'refreshing') reconcile();
+      }, 0);
+    };
+    const writesChanged = (event) => {
+      if (countsDeferred.current && event.detail?.phase === 'finish' && countWriteState().pending === 0) wakeReadiness('writes_settled');
+    };
     const scopeChanged = () => {
       if (useStore.getState().connectionStatus.phase === 'refreshError') reconcile();
+      else wakeReadiness('scope');
     };
+    const stopCounts = useStore.subscribe((state, previous) => {
+      if (!countsDeferred.current) return;
+      const becameComplete = state.unreadCounts.complete && !previous.unreadCounts.complete;
+      const settledProjection = Object.keys(previous.pendingCounts).length > 0 && Object.keys(state.pendingCounts).length === 0;
+      if (becameComplete || settledProjection) wakeReadiness('counts_settled');
+    });
+    window.addEventListener('mailflow:count-write', writesChanged);
     window.addEventListener('mailflow:connection-retry', retry);
     window.addEventListener('mailflow:connection-scope', scopeChanged);
     window.addEventListener('offline', offline);
     return () => {
+      stopCounts();
+      window.removeEventListener('mailflow:count-write', writesChanged);
       window.removeEventListener('mailflow:connection-retry', retry);
       window.removeEventListener('mailflow:connection-scope', scopeChanged);
       window.removeEventListener('offline', offline);

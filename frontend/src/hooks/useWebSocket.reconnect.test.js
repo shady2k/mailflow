@@ -352,6 +352,90 @@ test('manual retry replaces an OPEN socket still awaiting authentication instead
   }
 });
 
+for (const inFlight of [false, true]) test(`settled count readiness wakes before the 5s watchdog${inFlight ? ', including during an in-flight list request' : ''}`, async () => {
+  const root = createRoot(document.getElementById('root'));
+  const oldCounts = api.getUnreadCounts, oldTimeout = globalThis.setTimeout, oldClear = globalThis.clearTimeout;
+  const watchdogs = new Map(); let timer = 95000, ready = false, listCalls = 0, release;
+  globalThis.setTimeout = (fn, delay, ...args) => {
+    if (delay === 5000) { watchdogs.set(++timer, fn); return timer; }
+    return oldTimeout(fn, delay, ...args);
+  };
+  globalThis.clearTimeout = id => { if (!watchdogs.delete(id)) oldClear(id); };
+  const stopMessages = registerConnectionRefresh('messages', async () => {
+    listCalls++;
+    if (inFlight && listCalls === 1) return new Promise(resolve => { release = resolve; });
+    return true;
+  });
+  let categoryReady = false;
+  const stopCategories = registerConnectionRefresh('categories', async () => categoryReady);
+  useStore.setState({ accounts: [], folders: {}, pendingCounts: {}, categoryPendingRemovals: {} });
+  api.getUnreadCounts = async () => ({ byAccount: {}, complete: ready });
+  try {
+    await React.act(async () => root.render(React.createElement(App)));
+    socket.readyState = WebSocket.OPEN; await React.act(async () => confirm(socket));
+    await React.act(async () => window.dispatchEvent(new window.Event('online')));
+    socket.readyState = WebSocket.OPEN; await React.act(async () => confirm(socket));
+    assert.equal(listCalls, 1);
+    assert.equal(useStore.getState().connectionStatus.phase, 'refreshing');
+    // A separate HTTP/WS snapshot settles the old projection while the banner is pending.
+    ready = true;
+    await React.act(async () => {
+      useStore.setState({ pendingCounts: { a: { base: 1, delta: -1 } } });
+      useStore.setState({ pendingCounts: {} });
+      release?.(true);
+      await new Promise(resolve => oldTimeout(resolve, 20));
+    });
+    assert.equal(listCalls, 2, 'settlement wakes a full catch-up without firing the watchdog');
+    assert.equal(useStore.getState().connectionStatus.phase, 'refreshing', 'unconfirmed categories must still hold readiness');
+    assert.equal(watchdogs.size, 1);
+    categoryReady = true;
+    await React.act(async () => {
+      window.dispatchEvent(new CustomEvent('mailflow:connection-scope'));
+      await new Promise(resolve => oldTimeout(resolve, 20));
+    });
+    assert.equal(useStore.getState().connectionStatus.phase, 'healthy');
+    assert.equal(watchdogs.size, 0);
+  } finally {
+    await React.act(async () => root.unmount()); stopMessages(); stopCategories();
+    api.getUnreadCounts = oldCounts; globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear;
+    useStore.setState({ pendingCounts: {}, accounts: [], folders: {} });
+  }
+});
+
+test('finishing the last pending write wakes readiness without requiring a projection transition', async () => {
+  const { beginCountWrite, countWriteState } = await import('../utils/countWrites.js');
+  const root = createRoot(document.getElementById('root'));
+  const oldCounts = api.getUnreadCounts, oldTimeout = globalThis.setTimeout, oldClear = globalThis.clearTimeout;
+  const watchdogs = new Map(); let timer = 97000, listCalls = 0;
+  globalThis.setTimeout = (fn, delay, ...args) => {
+    if (delay === 5000) { watchdogs.set(++timer, fn); return timer; }
+    return oldTimeout(fn, delay, ...args);
+  };
+  globalThis.clearTimeout = id => { if (!watchdogs.delete(id)) oldClear(id); };
+  const stopMessages = registerConnectionRefresh('messages', async () => { listCalls++; return true; });
+  const stopCategories = registerConnectionRefresh('categories', async () => true);
+  useStore.setState({ accounts: [], folders: {}, pendingCounts: {} });
+  api.getUnreadCounts = async () => ({ byAccount: {}, complete: true });
+  const finishOne = beginCountWrite(), finishTwo = beginCountWrite();
+  try {
+    await React.act(async () => root.render(React.createElement(App)));
+    socket.readyState = WebSocket.OPEN; await React.act(async () => confirm(socket));
+    await React.act(async () => window.dispatchEvent(new window.Event('online')));
+    socket.readyState = WebSocket.OPEN; await React.act(async () => confirm(socket));
+    assert.equal(countWriteState().pending, 2); assert.equal(listCalls, 1);
+    assert.equal(useStore.getState().connectionStatus.phase, 'refreshing');
+    await React.act(async () => { finishOne(); await new Promise(resolve => oldTimeout(resolve, 20)); });
+    assert.equal(listCalls, 1, 'an outstanding second write must still hold the gate');
+    assert.equal(useStore.getState().connectionStatus.phase, 'refreshing');
+    await React.act(async () => { finishTwo(); await new Promise(resolve => oldTimeout(resolve, 20)); });
+    assert.equal(listCalls, 2); assert.equal(useStore.getState().connectionStatus.phase, 'healthy');
+    assert.equal(watchdogs.size, 0);
+  } finally {
+    finishOne(); finishTwo(); await React.act(async () => root.unmount()); stopMessages(); stopCategories();
+    api.getUnreadCounts = oldCounts; globalThis.setTimeout = oldTimeout; globalThis.clearTimeout = oldClear;
+  }
+});
+
 test('loaded folder snapshots participate in catch-up and late disconnected folders cannot apply', async () => {
   const root=createRoot(document.getElementById('root'));
   const oldCounts=api.getUnreadCounts, oldFolders=api.getFolders;
