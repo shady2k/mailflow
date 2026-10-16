@@ -8,7 +8,7 @@ test('a delayed push cannot restore the badge after a live client archives mail'
   const self = {
     addEventListener: (type, callback) => { listeners[type] = callback; },
     navigator: { setAppBadge: async n => writes.push(n), clearAppBadge: async () => writes.push(0) },
-    clients: { matchAll: async () => [{ postMessage: data => messages.push(data) }] },
+    clients: { matchAll: async () => [{ visibilityState: 'visible', postMessage: data => messages.push(data) }] },
     registration: { showNotification: async () => {} },
   };
   vm.runInNewContext(readFileSync(new URL('../../public/sw.js', import.meta.url), 'utf8'), { self });
@@ -76,4 +76,55 @@ test('an in-flight clientless push read cannot overwrite a newer controlled badg
   await w.run('message', { data: { type: 'mailflow:badge', total: 0, enabled: true } });
   release(); await oldPush;
   assert.deepEqual(w.writes, [0], 'newer page archive invalidates the older push HTTP read');
+});
+
+
+test('push refreshes the OS badge while an existing PWA window is hidden and suspended', async () => {
+  const messages = [];
+  const w = worker({
+    clients: [{ visibilityState: 'hidden', postMessage: data => messages.push(data) }],
+    fetch: async url => ({ ok: true, json: async () => url.includes('preferences')
+      ? { showAppBadge: true } : { total: 1, complete: true } }),
+  });
+  await w.run('push', { data: { json: () => ({ counts: { total: 99 } }) } });
+  assert.deepEqual(w.writes, [1], 'fresh snapshot updates badge without waiting for the suspended page');
+  assert.equal(messages[0]?.type, 'mailflow:counts_refresh');
+});
+
+test('a visible client keeps ownership even with other hidden windows', async () => {
+  const w = worker({
+    clients: [
+      { visibilityState: 'hidden', postMessage() {} },
+      { visibilityState: 'visible', postMessage() {} },
+    ],
+    fetch: async () => { throw new Error('visible store must retain its projection'); },
+  });
+  await w.run('push', { data: { json: () => ({ counts: { total: 99 } }) } });
+  assert.deepEqual(w.writes, []);
+});
+
+test('a newer page badge invalidates a push while its second client lookup is pending', async () => {
+  let release, lookups = 0;
+  const listeners = {}, writes = [];
+  const self = {
+    addEventListener: (type, callback) => { listeners[type] = callback; },
+    navigator: { setAppBadge: async n => writes.push(n), clearAppBadge: async () => writes.push(0) },
+    clients: { matchAll: async () => {
+      if (++lookups === 2) await new Promise(resolve => { release = resolve; });
+      return [{ visibilityState: 'hidden', postMessage() {} }];
+    } },
+    registration: { showNotification: async () => {} },
+  };
+  const fetch = async url => ({ ok: true, json: async () => url.includes('preferences')
+    ? { showAppBadge: true } : { total: 2, complete: true } });
+  vm.runInNewContext(readFileSync(new URL('../../public/sw.js', import.meta.url), 'utf8'), { self, fetch });
+  let done;
+  listeners.push({ data: { json: () => ({}) }, waitUntil: promise => { done = promise; } });
+  for (let i = 0; i < 20 && !release; i++) await Promise.resolve();
+  assert.ok(release);
+  let pageDone;
+  listeners.message({ data: { type: 'mailflow:badge', total: 0, enabled: true }, waitUntil: p => { pageDone = p; } });
+  await pageDone;
+  release(); await done;
+  assert.deepEqual(writes, [0]);
 });

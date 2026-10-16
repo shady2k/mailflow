@@ -841,7 +841,6 @@ export function applyTheme(themeName) {
 const FAVICON_PX = 32;
 let _badgeCount  = 0;
 let _renderSeq   = 0;
-let _appliedSeq  = 0;
 
 // Cached rasterization of the base favicon (envelope icon, no badge).
 // Once populated, badge updates are drawn synchronously with Canvas 2D —
@@ -854,7 +853,7 @@ let _baseAccent = null;
 // show no favicon between the two mutations, making updates appear sluggish.
 let _faviconLink = null;
 
-function _setFaviconLink(dataUri) {
+function _setFaviconLink(dataUri, type = 'image/png') {
   if (!_faviconLink || !_faviconLink.isConnected) {
     // Reuse the existing icon element from index.html on first call so Chrome
     // processes a href change on a known element rather than discovering a new one.
@@ -870,7 +869,7 @@ function _setFaviconLink(dataUri) {
       if (l !== _faviconLink) l.remove();
     });
   }
-  _faviconLink.type = 'image/png';
+  _faviconLink.type = type;
   _faviconLink.href = dataUri;
 }
 
@@ -893,6 +892,7 @@ function _rasterise(svgStr, onCanvas) {
 function _warmBase(accent) {
   if (_baseCanvas && _baseAccent === accent) return;
   _rasterise(buildFaviconSvg(accent, 0), (canvas) => {
+    if (accent !== getEffectiveAccent()) return;
     if (_baseCanvas && _baseAccent === accent) return; // lost the race
     _baseCanvas = canvas;
     _baseAccent = accent;
@@ -906,19 +906,18 @@ function _applyFavicon(accent) {
   // on-disk file after tab focus changes.
   const isBase = _badgeCount === 0; // capture before any async gap
   const seq    = ++_renderSeq;
+  // Clear immediately even if SVG-to-PNG decoding is delayed or fails. The
+  // current zero PNG replaces this unbadged SVG when ready.
+  if (isBase && (!_baseCanvas || _baseAccent !== accent)) {
+    _setFaviconLink(`data:image/svg+xml,${encodeURIComponent(buildFaviconSvg(accent, 0))}`, 'image/svg+xml');
+  }
   _rasterise(buildFaviconSvg(accent, _badgeCount), (canvas) => {
-    // Cache the no-badge render as the base so all future badge updates can
-    // skip the async round-trip and draw synchronously via Canvas 2D.
-    // Do this before the seq guard so the cache is always populated, even
-    // if a later render has already applied its result to the DOM.
-    if (isBase && !_baseCanvas) {
+    // A newer request invalidates this callback even before its image loads.
+    if (seq !== _renderSeq) return;
+    if (isBase) {
       _baseCanvas = canvas;
       _baseAccent = accent;
     }
-
-    // Only skip this render if a *later* render already applied its result.
-    if (seq < _appliedSeq) return;
-    _appliedSeq = seq;
     _setFaviconLink(canvas.toDataURL('image/png'));
   });
 }
@@ -932,7 +931,7 @@ export function updateFaviconBadge(count) {
   if (_baseCanvas && _baseAccent === accent) {
     // Advance the sequence counter so any in-flight slow-path renders that
     // complete later are treated as stale and don't overwrite this result.
-    _appliedSeq = ++_renderSeq;
+    ++_renderSeq;
 
     const canvas = document.createElement('canvas');
     canvas.width  = FAVICON_PX;

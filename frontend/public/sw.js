@@ -39,10 +39,11 @@ self.addEventListener('push', (event) => {
         const promises = [];
 
         for (const client of clients) client.postMessage({ type: 'mailflow:counts_refresh' });
-        // A push can predate a live client's archive/Undo. Its count must never overwrite
-        // the store's projection. Without a client, read the same authenticated snapshot
+        // Hidden windows may be suspended and cannot update the badge from postMessage.
+        // A push can predate a visible client's archive/Undo. Its count must never overwrite
+        // the store's projection. Without a visible client, read the authenticated snapshot
         // as the UI rather than the cached-row tally or delivery order of push payloads.
-        if (!clients.length) promises.push(refreshAppBadge());
+        if (!clients.some(client => client.visibilityState === 'visible')) promises.push(refreshAppBadge());
 
         // iOS/WebKit requires showNotification() to be called for every push event.
         // Skipping it — even when a client is focused — causes WebKit to log a
@@ -99,7 +100,8 @@ async function refreshAppBadge() {
     if (generation !== badgeRefreshGeneration) return;
     // A client may have opened while the HTTP request was in flight.
     const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    if (clients.length) {
+    if (generation !== badgeRefreshGeneration) return;
+    if (clients.some(client => client.visibilityState === 'visible')) {
       for (const client of clients) client.postMessage({ type: 'mailflow:counts_refresh' });
       return;
     }

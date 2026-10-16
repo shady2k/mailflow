@@ -12,6 +12,7 @@ on:
       - 'integration/upstream-20261016'
       - 'fix/ai-actions-full-text-20261016'
       - 'fix/resume-ai-cache-20261016'
+      - 'fix/background-pwa-badge-20261016'
       - 'fix/list-window-recovery-20261013'
     tags:
       - 'v*.*.*'
@@ -55,7 +56,7 @@ jobs:
             # stock compose file pulls latest, and a beta exists precisely because it is
             # not for them yet. The semver patterns already skip prereleases on their own.
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-') }}
-            type=raw,value=test-${{ github.sha }},enable=${{ github.ref == 'refs/heads/feat/unicode-body-search-and-inbox-layout' || github.ref == 'refs/heads/test/integrated-indexing-cache-locale' || github.ref == 'refs/heads/fix/search-pending-feedback' || github.ref == 'refs/heads/fix/category-total-counts' || github.ref == 'refs/heads/fix/systemic-integration-v2' || github.ref == 'refs/heads/integration/upstream-20261013' || github.ref == 'refs/heads/integration/upstream-20261016' || github.ref == 'refs/heads/fix/ai-actions-full-text-20261016' || github.ref == 'refs/heads/fix/resume-ai-cache-20261016' || github.ref == 'refs/heads/fix/list-window-recovery-20261013' }}
+            type=raw,value=test-${{ github.sha }},enable=${{ github.ref == 'refs/heads/feat/unicode-body-search-and-inbox-layout' || github.ref == 'refs/heads/test/integrated-indexing-cache-locale' || github.ref == 'refs/heads/fix/search-pending-feedback' || github.ref == 'refs/heads/fix/category-total-counts' || github.ref == 'refs/heads/fix/systemic-integration-v2' || github.ref == 'refs/heads/integration/upstream-20261013' || github.ref == 'refs/heads/integration/upstream-20261016' || github.ref == 'refs/heads/fix/ai-actions-full-text-20261016' || github.ref == 'refs/heads/fix/resume-ai-cache-20261016' || github.ref == 'refs/heads/fix/background-pwa-badge-20261016' || github.ref == 'refs/heads/fix/list-window-recovery-20261013' }}
 
       - name: Build and push backend
         uses: docker/build-push-action@v6
@@ -87,7 +88,7 @@ jobs:
             # stock compose file pulls latest, and a beta exists precisely because it is
             # not for them yet. The semver patterns already skip prereleases on their own.
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-') }}
-            type=raw,value=test-${{ github.sha }},enable=${{ github.ref == 'refs/heads/feat/unicode-body-search-and-inbox-layout' || github.ref == 'refs/heads/test/integrated-indexing-cache-locale' || github.ref == 'refs/heads/fix/search-pending-feedback' || github.ref == 'refs/heads/fix/category-total-counts' || github.ref == 'refs/heads/fix/systemic-integration-v2' || github.ref == 'refs/heads/integration/upstream-20261013' || github.ref == 'refs/heads/integration/upstream-20261016' || github.ref == 'refs/heads/fix/ai-actions-full-text-20261016' || github.ref == 'refs/heads/fix/resume-ai-cache-20261016' || github.ref == 'refs/heads/fix/list-window-recovery-20261013' }}
+            type=raw,value=test-${{ github.sha }},enable=${{ github.ref == 'refs/heads/feat/unicode-body-search-and-inbox-layout' || github.ref == 'refs/heads/test/integrated-indexing-cache-locale' || github.ref == 'refs/heads/fix/search-pending-feedback' || github.ref == 'refs/heads/fix/category-total-counts' || github.ref == 'refs/heads/fix/systemic-integration-v2' || github.ref == 'refs/heads/integration/upstream-20261013' || github.ref == 'refs/heads/integration/upstream-20261016' || github.ref == 'refs/heads/fix/ai-actions-full-text-20261016' || github.ref == 'refs/heads/fix/resume-ai-cache-20261016' || github.ref == 'refs/heads/fix/background-pwa-badge-20261016' || github.ref == 'refs/heads/fix/list-window-recovery-20261013' }}
 
       - name: Build and push frontend
         uses: docker/build-push-action@v6
