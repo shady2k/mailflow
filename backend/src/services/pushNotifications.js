@@ -23,7 +23,7 @@ if (pushConfigured) {
  * Errors from individual devices never throw — they are logged and skipped so
  * one bad subscription can't block delivery to the rest.
  */
-export async function sendPushToUser(userId, payload) {
+export async function sendPushToUser(userId, payload, { countAccountId } = {}) {
   if (!pushConfigured) return;
 
   const result = await query(
@@ -35,7 +35,16 @@ export async function sendPushToUser(userId, payload) {
   const notification = { ...payload, countUserId: userId };
   delete notification.unreadCount;
   delete notification.counts;
-  try { notification.counts = await getUnreadCountSnapshot(userId); } catch { /* Notification delivery must survive unavailable counts. */ }
+  delete notification.badgeEvent;
+  try {
+    notification.counts = await getUnreadCountSnapshot(userId);
+    // The floor is read after this event. A subsequent successful STATUS sample
+    // must exceed it; a recent pre-arrival observation is never sufficient proof.
+    const floor = notification.counts.barrierRevision;
+    if (countAccountId && /^\d{1,20}$/.test(floor || '')) {
+      notification.badgeEvent = { accountId: countAccountId, afterRevision: floor };
+    }
+  } catch { /* Notification delivery must survive unavailable count observations. */ }
   const body = JSON.stringify(notification);
   const staleIds = [];
 

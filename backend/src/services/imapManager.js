@@ -4521,7 +4521,7 @@ export class ImapManager {
               // fall back to the inbox if the id is somehow absent.
               url: latest.id ? `/?m=${latest.id}` : '/',
             };
-            sendPushToUser(account.user_id, basePayload)
+            sendPushToUser(account.user_id, basePayload, { countAccountId: account.id })
               .catch(err => console.warn('Push notification error:', err.message));
           }
           // Pre-warm the body cache for newly arrived messages so clicking one

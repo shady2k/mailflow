@@ -6,6 +6,7 @@
 
 import { api } from './api.js';
 import { getDiagEvents } from './diagEvents.js';
+import { collectServiceWorkerDiagnostics } from './serviceWorkerDiagnostics.js';
 
 const REPORT_SCHEMA_VERSION = 1;
 
@@ -122,6 +123,7 @@ export async function generateReport({ locale, theme, uiScale }) {
     folders: server?.folders ?? [],
     counts: server?.counts ?? {},
     events,
+    serviceWorker: await collectServiceWorkerDiagnostics(),
     warnings: server?.warnings ?? [],
     syncSignals: server?.syncSignals ?? [],
     connection: server?.connection ?? {},
