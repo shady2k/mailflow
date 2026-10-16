@@ -162,7 +162,7 @@ test('real transport recovers backend restart, session failures and missed data 
     useStore.getState().setUnreadCounts(await api.getUnreadCounts());
     assert.equal(useStore.getState().unreadCounts.total, 1);
     for (const client of wss.clients) client.terminate();
-    await wait(() => ref.current?._confirmed && useStore.getState().connectionStatus.phase === 'refreshError', 'WS reconnect cannot claim healthy while actual write/snapshot are pending');
+    await wait(() => ref.current?._confirmed && useStore.getState().connectionStatus.phase === 'refreshing', 'pending write/snapshot defers readiness without claiming failure or success');
     await sw('push', { json: () => ({ unreadCount: 2 }) });
     assert.deepEqual(badgeWrites, [1], 'delayed push cannot overwrite projected badge');
     assert.equal(useStore.getState().unreadCounts.total, 1);
@@ -217,7 +217,7 @@ test('real transport recovers backend restart, session failures and missed data 
     await wait(() => useStore.getState().connectionStatus.phase === 'refreshError', 'HTTP failure keeps recovery warning');
     assert.equal(useStore.getState().messages.length, 4);
     httpFailure = false; pending = true; revision = 5; const beforePending = messageReads;
-    await wait(() => messageReads > beforePending && useStore.getState().connectionStatus.phase === 'refreshError', 'pending mutation defers success');
+    await wait(() => messageReads > beforePending && useStore.getState().connectionStatus.phase === 'refreshing', 'pending mutation defers success without a false error');
     pending = false;
     await wait(() => useStore.getState().messages.length === 5 && useStore.getState().connectionStatus.phase === 'healthy', 'settled mutation permits automatic retry');
 
